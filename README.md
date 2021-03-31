@@ -87,9 +87,9 @@
 
 ## 8. Todo <a name="todo"></a>
 - [ ] Support the <a href="https://github.com/wandb/client"> wandb</a>
-- [ ] Support Learning rate finder
+- [ ] Support learning rate finder
 - [ ] Improve logger
-- [ ] TensorRT
+- [ ] Support TensorRT
 
 
 ## 9. License <a name="license"></a>
