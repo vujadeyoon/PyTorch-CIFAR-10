@@ -1,6 +1,6 @@
 """
 Dveloper: vujadeyoon
-E-mail: sjyoon1671@gmail.com
+Email: vujadeyoon@gmail.com
 Github: https://github.com/vujadeyoon/vujade
 
 Title: vujade_profiler.py
@@ -11,16 +11,16 @@ Description: A module for profiler
 import os
 import re
 import traceback
-import psutil
-import subprocess
+import functools
 import time
+import datetime
 import statistics
 import numpy as np
 from vujade import vujade_resource as rsc_
 from vujade import vujade_utils as utils_
 
 
-class DEBUG:
+class DEBUG(object):
     def __init__(self):
         self.fileName = None
         self.lineNumber = None
@@ -43,7 +43,43 @@ class DEBUG:
         return False
 
 
-class IntegratedProfiler:
+def measure_time(_iter: int = 1, _warmup: int = 0):
+    """
+    Usage: @prof_.measure_time(_iter=1, _warmup=0)
+           def test(_arg):
+               pass
+    Description: This is a decorator which can be used to measured the elapsed time for a callable function.
+    """
+    if _iter < 1:
+        raise ValueError('The _iter, {} should be greater than 0.'.format(_iter))
+
+    def _measure_time(_func):
+        @functools.wraps(_func)
+        def _wrapper(*args, **kwargs):
+            debug_info = DEBUG()
+            debug_info.get_file_line()
+
+            result = None
+            time_cumsum = 0.0
+            for _ in range(_warmup):
+                result = _func(*args, **kwargs)
+
+            for _ in range(_iter):
+                time_start = time.time()
+                result = _func(*args, **kwargs)
+                time_end = time.time()
+                time_cumsum += (time_end - time_start)
+
+            info_trace_1 = '[{}: {}]:'.format(debug_info.fileName, debug_info.lineNumber)
+            info_trace_2 = 'The function, {} is called.'.format(_func.__name__)
+            info_trace_3 = 'Total time for {} times: {:.2e} sec. Avg. time: {:.2e} sec.'.format(_iter, time_cumsum, time_cumsum / _iter)
+            print('{} {} {}'.format(info_trace_1, info_trace_2, info_trace_3))
+            return result
+        return _wrapper
+    return _measure_time
+
+
+class IntegratedProfiler(object):
     def __init__(self, _pid: int = utils_.getpid(), _gpu_id: int = 0) -> None:
         self.prof_time = TimeProfiler()
         self.prof_mem_main = MainMemoryProfiler(_pid=_pid)
@@ -239,9 +275,11 @@ class AverageMeterGPUMemory(rsc_.GPUMemory):
         self.mem_max = max(self.mem_list)
 
 
-class AverageMeterTime:
-    """This class is intended to profile the processing time"""
-    def __init__(self, _warmup: int = 0):
+class AverageMeterTime(object):
+    """
+    This class is intended to profile the processing time
+    """
+    def __init__(self, _warmup: int = 0) -> None:
         """
         :param int _warmup: A number of times for warming up.
         """
@@ -253,24 +291,24 @@ class AverageMeterTime:
         self.fps_avg = 0.0
         self.eps_val = 1e-9
 
-    def tic(self):
+    def tic(self) -> None:
         self.time_start = time.time()
 
-    def toc(self):
+    def toc(self) -> None:
         self.time_end = time.time()
         self.cnt_call += 1
 
         if self.warmup < self.cnt_call:
             self._update()
 
-    def _update(self):
+    def _update(self) -> None:
         self.time_len = (self.cnt_call - self.warmup)
         self.time_sum += (self.time_end - self.time_start)
         self.time_avg = (self.time_sum / self.time_len)
         self.fps_avg = 1 / (self.time_avg + self.eps_val)
 
 
-class AverageMeterValue:
+class AverageMeterValue(object):
     def __init__(self, **kwargs):
         self.cnt_call = 0
         self.keys = list(kwargs.keys())
@@ -301,3 +339,33 @@ class AverageMeterValue:
         self.ndarr_vals_min = self.ndarr_vals.min(axis=0)
 
         self.cnt_call += 1
+
+
+class ETA(object):
+    def __init__(self, _len_epoch: int, _num_iters: int, _warmup: int = 0) -> None:
+        super(ETA, self).__init__()
+        self.len_epoch = _len_epoch
+        self.num_iters = _num_iters
+        self.warmup = _warmup
+        self.avgmeter_time_train = AverageMeterTime(_warmup=self.warmup)
+        self.avgmeter_time_valid = AverageMeterTime(_warmup=self.warmup)
+        self.time_avg = 0.0
+
+    def tic(self, _is_train: bool = True) -> None:
+        if _is_train is True:
+            self.avgmeter_time_train.tic()
+        else:
+            self.avgmeter_time_valid.tic()
+
+    def toc(self, _is_train: bool = True) -> None:
+        if _is_train is True:
+            self.avgmeter_time_train.toc()
+        else:
+            self.avgmeter_time_valid.tic()
+
+        self.time_avg = self.avgmeter_time_train.time_avg + (self.avgmeter_time_valid.time_avg / self.len_epoch)
+
+    def get(self, _num_iter_curr: int) -> str:
+        num_iter_remain = self.num_iters - _num_iter_curr
+
+        return str(datetime.timedelta(seconds=int(self.time_avg * num_iter_remain)))

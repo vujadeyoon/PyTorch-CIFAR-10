@@ -1,6 +1,6 @@
 """
 Dveloper: vujadeyoon
-E-mail: sjyoon1671@gmail.com
+Email: vujadeyoon@gmail.com
 Github: https://github.com/vujadeyoon/vujade
 
 Title: vujade_multiprocess.py
@@ -14,7 +14,7 @@ from multiprocessing import Process
 from multiprocessing import Queue
 
 
-class _BaseMultiProcess:
+class BaseMultiProcess(object):
     def __init__(self, _target_method, _num_proc=os.cpu_count()):
         self.target_method = _target_method
         self.num_proc = _num_proc

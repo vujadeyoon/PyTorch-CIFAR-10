@@ -1,6 +1,6 @@
 """
 Dveloper: vujadeyoon
-E-mail: sjyoon1671@gmail.com
+Email: vujadeyoon@gmail.com
 Github: https://github.com/vujadeyoon/vujade
 
 Title: vujade_imgcv.py
@@ -11,14 +11,20 @@ Description: A module for image processing and computer vision
 
 import os
 import numpy as np
-from PIL import Image
 import cv2
 import cv2.ximgproc as ximgproc
 import pywt
+import matplotlib.pyplot as plt
+from PIL import Image
+from typing import Optional, Set
 from vujade import vujade_multiprocess as multiprocess_
 
 
-class _ImWriterMP(multiprocess_._BaseMultiProcess):
+def get_img_extension() -> Set[str]:
+    return {'.bmp', '.jpg', 'jpeg', '.png'}
+
+
+class _ImWriterMP(multiprocess_.BaseMultiProcess):
     def __init__(self, _num_proc=os.cpu_count()):
         super(_ImWriterMP, self).__init__(_target_method=self._target_method, _num_proc=_num_proc)
 
@@ -66,7 +72,7 @@ class ImWriterMP(_ImWriterMP):
         return list_frames, list_idx_frames
 
 
-class DWT2():
+class DWT2(object):
     def __init__(self, _wavelet='haar'):
         super(DWT2, self).__init__()
         self.wavelet = _wavelet
@@ -76,7 +82,16 @@ class DWT2():
         return dwt2_coeffs
 
     def inverse_transform(self, _coeffs):
-        pywt.idwt2(coeffs=_coeffs, wavelet=self.wavelet)
+        return pywt.idwt2(coeffs=_coeffs, wavelet=self.wavelet)
+
+
+def check_valid_pixel(_x: int, _bit: int = 8) -> bool:
+    return (0 <= _x) and (_x <= ((2 ** _bit) - 1))
+
+
+def bgr2hex(_bgr: tuple) -> str:
+    b, g, r = _bgr
+    return ('#' + hex(r)[2:].zfill(2) + hex(g)[2:].zfill(2) + hex(b)[2:].zfill(2)).upper()
 
 
 def is_image_file(filename):
@@ -109,18 +124,35 @@ def imshow(_winname='Test image', _ndarr=None):
     cv2.imshow(winname=_winname, mat=_ndarr.astype(np.uint8))
 
 
-def clip(_ndarr, _min=None, _max=None, isround=True, _round_decimals=0):
+def plot(_ndarr: np.ndarray, _offset: int = 12, _is_axis: bool = False, _is_bgr2rgb: bool = True) -> None:
+    img_channel, img_height, img_width = _ndarr.shape
+    plt.figure(figsize=(_offset, img_height / img_width * _offset))
+
+    if _is_axis is False:
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+        plt.axis('off')
+
+    if _is_bgr2rgb is True:
+        res = cv2.cvtColor(src=_ndarr, code=cv2.COLOR_BGR2RGB)
+    else:
+        res = _ndarr
+
+    plt.imshow(res) # Order of the channel: RGB
+    plt.show()
+
+
+def clip(_ndarr: np.ndarray, _min: Optional[float] = None, _max: Optional[float] = None, _is_round: bool = True, _round_decimals: int = 0) -> np.ndarray:
     if _min is None:
         _min = _ndarr.min()
     if _max is None:
         _max = _ndarr.max()
-    if isround:
+    if _is_round is True:
         _ndarr = _ndarr.round(decimals=_round_decimals)
 
     return np.clip(a=_ndarr, a_min=_min, a_max=_max)
 
 
-def casting(_ndarr, _dtype=np.uint8):
+def casting(_ndarr: np.ndarray, _dtype: type = np.uint8) -> np.ndarray:
     """
     It is recommended to call clip function before calling the casting function.
     """
@@ -220,7 +252,7 @@ def img2ndarr(_img):
     return np.array(_img, copy=True) # Default copy parameter: True
 
 
-class Guided_Filter():
+class Guided_Filter(object):
     def __init__(self, _radius=5, _eps=None, _dDepth=-1, _scale=0.01, _option='layer_detail'):
         """
         The class, GuidedFilter, should be used for each image because of variable, self.layer_detail_max when using the option, layer_detail_rescale.

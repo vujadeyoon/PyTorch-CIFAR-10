@@ -1,6 +1,6 @@
 """
 Dveloper: vujadeyoon
-E-mail: sjyoon1671@gmail.com
+Email: vujadeyoon@gmail.com
 Github: https://github.com/vujadeyoon/vujade
 
 Title: vujade_str.py
@@ -9,15 +9,38 @@ Description: A module for string
 
 
 import argparse
+import ast
 import json
-from typing import Union
+from typing import Union, Optional
+
+
+def upper(_str: str, _range: Optional[tuple] = None) -> str:
+    if _range is None:
+        res = _str.upper()
+    else:
+        idx_start, idx_end = _range
+        res = _str[idx_start:idx_end].upper() + _str[idx_end:]
+
+    return res
+
+
+def rstrip(_str: str, _chars: Optional[str] = None) -> str:
+    return _str.rstrip(_chars)
+
+
+def lstrip(_str: str, _chars: Optional[str] = None) -> str:
+    return _str.lstrip(_chars)
 
 
 def remove_multiple_whitespace(_str: str) -> str:
     return ' '.join(_str.split())
 
 
-def str2dict_2(_str: str) -> dict:
+def str2dict_v1(_str: str) -> dict:
+    return dict(line.rstrip().split(None, 1) for line in _str.splitlines())
+
+
+def str2dict_v2(_str: str) -> dict:
     res = {}
     for _idx, _line in enumerate(_str.splitlines()):
         key_val = _line.rstrip().split(None, 1)
@@ -29,8 +52,12 @@ def str2dict_2(_str: str) -> dict:
     return res
 
 
-def str2dict_1(_str: str) -> dict:
-    return dict(line.rstrip().split(None, 1) for line in _str.splitlines())
+def str2dict_v3(_str: str) -> dict:
+    return json.loads(_str)
+
+
+def str2dict_v4(_str: str) -> dict:
+    return ast.literal_eval(_str)
 
 
 def str2bool(_v: Union[str, bool]) -> bool:
@@ -52,9 +79,20 @@ def str2tuple(_str: str) -> tuple:
         raise argparse.ArgumentTypeError('The argument should be string.')
 
 
-def str2list(_str: str) -> list:
+def str2list_v1(_str: str) -> list:
     if isinstance(_str, str):
         return _str.replace(' ', '').replace('[', '').replace(']', '').split(',')
+    else:
+        raise argparse.ArgumentTypeError('The argument should be string.')
+
+
+def str2list_v2(_str: str) -> list:
+    return ast.literal_eval(_str)
+
+
+def list2str(_list_str: list) -> str:
+    if isinstance(_list_str, list):
+        return ' '.join(map(str, _list_str))
     else:
         raise argparse.ArgumentTypeError('The argument should be string.')
 
@@ -65,10 +103,3 @@ def strtuple2tuple(_str: str) -> tuple:
 
 def strlist2list(_str: str) -> list:
     return json.loads(_str) # ast.literal_eval(_str_list)
-
-
-def str2bash_parentheses(_str: str) -> str:
-    res = _str.replace('(', '\(')
-    res = res.replace(')', '\)')
-
-    return res

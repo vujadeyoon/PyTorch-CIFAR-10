@@ -1,6 +1,6 @@
 """
 Dveloper: vujadeyoon
-E-mail: sjyoon1671@gmail.com
+Email: vujadeyoon@gmail.com
 Github: https://github.com/vujadeyoon/vujade
 
 Title: vujade_resource.py
@@ -29,7 +29,7 @@ from vujade import vujade_multithread as multithread_
 from vujade import vujade_utils as utils_
 
 
-class GPUStat:
+class GPUStat(object):
     def __init__(self):
         """
         Unit: MiB
@@ -141,7 +141,7 @@ class GPUStat:
         return res
 
 
-class MainMemory:
+class MainMemory(object):
     def __init__(self, _pid=utils_.getpid()):
         """
         Unit: MiB
@@ -174,7 +174,7 @@ class MainMemory:
         return res
 
 
-class GPUMemory:
+class GPUMemory(object):
     def __init__(self, _pid=utils_.getpid(), _gpu_id=0):
         """
         Unit: MiB
@@ -203,9 +203,25 @@ class GPUMemory:
         self.info_proc = self.gpu_stat.get_info_proc(_pid=self.pid, _gpu_info=self.info_gpu)
 
 
-class LimitRunTime:
-    def __init__(self, _limit_sec, _pid=utils_.getpid()):
-        self.limit_sec = _limit_sec
+class LimitRunTime(object):
+    def __init__(self, _limit_sec: int, _pid: int = utils_.getpid()) -> None:
+        """
+        Usage:
+            Arguments:
+                _lmit_sec: only support second.
+
+            class Test(rsc_.LimitRunTime):
+                def __init__(self, _limit_sec, _pid=utils_.getpid()):
+                    super(Test, self).__init__(_limit_sec, _pid=_pid)
+                    self.pid = _pid
+
+                def run(self):
+                    cnt = 0
+                    while True:
+                        print('[{}]: {}'.format(cnt, self.pid))
+                        cnt += 1
+        """
+        self.limit_sec = int(math.floor(_limit_sec))
         self.pid = _pid
         soft, hard = resource.getrlimit(resource.RLIMIT_CPU)
         resource.setrlimit(resource.RLIMIT_CPU, (_limit_sec, hard))
@@ -215,8 +231,8 @@ class LimitRunTime:
         utils_.terminate_proc(_pid=self.pid)
 
 
-class LimitRunTimeFunc:
-    def __init__(self, _limit_sec):
+class LimitRunTimeFunc(object):
+    def __init__(self, _limit_sec: int) -> None:
         """
         Arguments:
             _lmit_sec: only support second.
@@ -226,18 +242,23 @@ class LimitRunTimeFunc:
                 time_start = time.time()
                 while True:
                     print('elapsed time: {:.2f}, {}'.format(time.time() - time_start, _a + _b))
+
             limit_func = LimitRunTimeFunc(_limit_sec=1.0)
             limit_func.run(test, (10, 20))
+            print('is_success: {}'.format(limit_func.is_success))
         """
         self.limit_sec = int(math.floor(_limit_sec))
+        self.is_success = None
 
     def run(self, _func, args=(), kwargs={}):
         try:
             with self._time_limit():
                 _func(*args, **kwargs)
+            self.is_success = True
         except self._TimeoutException as e:
             print('The function [{}] will be terminated because the runtime '
                   'is exceeded its limit [{:.2f}] second.'.format(_func, self.limit_sec))
+            self.is_success = False
 
     @contextlib.contextmanager
     def _time_limit(self):
@@ -256,14 +277,14 @@ class LimitRunTimeFunc:
             pass
 
 
-class LimitRunTimeFuncDecorator:
-    def __init__(self, _limit_sec):
+class LimitRunTimeFuncDecorator(object):
+    def __init__(self, _limit_sec: int) -> None:
         """
         Arguments:
             _lmit_sec: only support second.
 
         Usage:
-            @LimitRunTimeDecorator(_limit_sec=1.0)
+            @LimitRunTimeFuncDecorator(_limit_sec=1.0)
             def test(_a, _b):
                 time_start = time.time()
                 while True:
@@ -300,7 +321,7 @@ class LimitRunTimeFuncDecorator:
             pass
 
 
-class LimitMainMemory(MainMemory, multithread_.ThreadBase, threading.Thread):
+class LimitMainMemory(MainMemory, multithread_.BaseThread, threading.Thread):
     def __init__(self, _limit_mem, _unit_sec=10e-3, _pid=utils_.getpid(), _gpu_id=0, _is_print=True):
         """
         Unit: MiB
@@ -308,7 +329,7 @@ class LimitMainMemory(MainMemory, multithread_.ThreadBase, threading.Thread):
         Usage: LimitMainMemory(_limit_mem=1024).start() # 1024 MiB
         """
         MainMemory.__init__(self, _pid=_pid)
-        multithread_.ThreadBase.__init__(self)
+        multithread_.BaseThread.__init__(self)
         threading.Thread.__init__(self)
         self.daemon = True
         self.limit_mem = _limit_mem
@@ -349,7 +370,7 @@ class LimitMainMemory(MainMemory, multithread_.ThreadBase, threading.Thread):
         self.is_terminate = False
 
 
-class LimitMainMemoryDecorator(MainMemory, multithread_.ThreadBase, threading.Thread):
+class LimitMainMemoryDecorator(MainMemory, multithread_.BaseThread, threading.Thread):
     def __init__(self, _limit_mem, _unit_sec=10e-3, _pid=utils_.getpid(), _gpu_id=0, _is_print=True):
         """
         Unit: MiB
@@ -363,7 +384,7 @@ class LimitMainMemoryDecorator(MainMemory, multithread_.ThreadBase, threading.Th
                 d = 2 * c + b
         """
         MainMemory.__init__(self, _pid=_pid)
-        multithread_.ThreadBase.__init__(self)
+        multithread_.BaseThread.__init__(self)
         threading.Thread.__init__(self)
         self.daemon = False
         self.limit_mem = _limit_mem
@@ -413,7 +434,7 @@ class LimitMainMemoryDecorator(MainMemory, multithread_.ThreadBase, threading.Th
         self.is_terminate = False
 
 
-class LimitGPUMemory(GPUMemory, multithread_.ThreadBase, threading.Thread):
+class LimitGPUMemory(GPUMemory, multithread_.BaseThread, threading.Thread):
     def __init__(self, _limit_mem, _unit_sec=10e-3, _pid=utils_.getpid(), _gpu_id=0, _is_print=True):
         """
         Unit: MiB
@@ -421,7 +442,7 @@ class LimitGPUMemory(GPUMemory, multithread_.ThreadBase, threading.Thread):
         Usage: LimitGPUMemory(_limit_mem=1024).start() # 1024 MiB
         """
         GPUMemory.__init__(self, _pid=_pid, _gpu_id=_gpu_id)
-        multithread_.ThreadBase.__init__(self)
+        multithread_.BaseThread.__init__(self)
         threading.Thread.__init__(self)
         self.daemon = True
         self.limit_mem = _limit_mem
@@ -462,7 +483,7 @@ class LimitGPUMemory(GPUMemory, multithread_.ThreadBase, threading.Thread):
         self.is_terminate = False
 
 
-class LimitGPUMemoryDecorator(GPUMemory, multithread_.ThreadBase, threading.Thread):
+class LimitGPUMemoryDecorator(GPUMemory, multithread_.BaseThread, threading.Thread):
     def __init__(self, _limit_mem, _unit_sec=10e-3, _pid=utils_.getpid(), _gpu_id=0, _is_print=True):
         """
         Unit: MiB
@@ -475,7 +496,7 @@ class LimitGPUMemoryDecorator(GPUMemory, multithread_.ThreadBase, threading.Thre
                 d = 2 * c + b
         """
         GPUMemory.__init__(self, _pid=_pid, _gpu_id=_gpu_id)
-        multithread_.ThreadBase.__init__(self)
+        multithread_.BaseThread.__init__(self)
         threading.Thread.__init__(self)
         self.limit_mem = _limit_mem
         self.unit_sec = _unit_sec

@@ -1,0 +1,123 @@
+name: CIFAR_10
+n_gpu: 1
+backup:
+  is_backup: true
+  cmd: tar -czvf {SPATH_BACKUP} --exclude ./.git --exclude ./saved .
+arch:
+  type: ResNet_18_2
+  args:
+    num_class: 10
+train_loader:
+  type: ClassificationDataLoader
+  args:
+    spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_train.csv
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_train/
+    is_train: true
+    size: [3, 32, 32]
+    padding: 4
+    prob_flip: 0.5
+    mean: [0.4914, 0.4822, 0.4465]
+    std: [0.2023, 0.1994, 0.2010]
+    shuffle: true
+    batch_size: 128
+    n_workers: 4
+    pin_memory: true
+valid_loader:
+  type: ClassificationDataLoader
+  args:
+    spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_test.csv
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_test/
+    is_train: false
+    size: [3, 32, 32]
+    padding: 0
+    prob_flip: 0.0
+    mean: [0.4914, 0.4822, 0.4465]
+    std: [0.2023, 0.1994, 0.2010]
+    shuffle: false
+    batch_size: 100
+    n_workers: 4
+    pin_memory: true
+test_loader:
+  type: ClassificationDataLoader
+  args:
+    spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_test.csv
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_test/
+    is_train: false
+    size: [3, 32, 32]
+    padding: 0
+    prob_flip: 0.0
+    mean: [0.4914, 0.4822, 0.4465]
+    std: [0.2023, 0.1994, 0.2010]
+    shuffle: false
+    batch_size: 100
+    n_workers: 4
+    pin_memory: true
+lr_scheduler:
+  warmup_alogrithm: Multiplicative
+  warmup_epoch: -1
+  warmup_lr: 1.0E-5
+  type: CosineAnnealingLR
+  args:
+    T_max: 200
+optimizer:
+  type: SGD
+  args:
+    lr: 1.0E-1
+    momentum: 0.9
+    weight_decay: 5.0E-4
+loss:
+  type: CrossEntropy
+  args:
+    _class_ignore: 255
+    _reduction: mean
+metric:
+  metric_1:
+    type: Accuracy
+  metric_2:
+    type: AccuarcyTopK
+    args:
+      _k: 3
+trainer:
+  is_amp: true
+  is_cuda: true
+  seed: 1234
+  epochs: 200
+  model_dir: ./saved/model/
+  save_period: 1
+  verbosity: 1
+  monitor: min val_loss
+  early_stop: -1
+  log_step: 1
+visualization:
+  tensorboard: true
+  log_dir: ./saved/log/
+  nrow: 1
+  ncol: 2
+  idx_picture: 0
+  normalize:
+    mean: [0.4914, 0.4822, 0.4465]
+    std: [0.2023, 0.1994, 0.2010]
+  dataformats: CHW
+hparam:
+  run_name: HyperParams_Result
+  key_metric: ['val_loss', 'val_Accuracy', 'val_AccuarcyTopK']
+summary:
+  model:
+    is_print: false
+  computational_cost:
+    is_print: true
+    units_macs: GMac
+    units_flops: GFlop
+    units_params: None
+    precision: 2
+    input_resolution: [3, 32, 32]
+    print_per_layer_stat: false
+    as_strings: true
+    verbose: false
+slack:
+  is_slack: false
+  token_usr: xoxp-2693953505635-2687219708646-2691288389205-f9c6d4eb12660eb70fbb9816cd646b7b
+  token_bot: xoxb-2693953505635-2691254873461-k5pARFSSoS6y1721mBhvs2Br
+  channel: face_parsing
+  is_time: true
+  is_debug: false

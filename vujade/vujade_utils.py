@@ -1,6 +1,6 @@
 """
 Dveloper: vujadeyoon
-E-mail: sjyoon1671@gmail.com
+Email: vujadeyoon@gmail.com
 Github: https://github.com/vujadeyoon/vujade
 
 Title: vujade_utils.py
@@ -10,7 +10,6 @@ Acknowledgement: This implementation is highly inspired from Berkeley CS188.
 """
 
 
-import datetime
 import sys
 import inspect
 import heapq
@@ -18,65 +17,234 @@ import random
 import os
 import glob
 import subprocess
+import shlex
 import shutil
 import psutil
+import multiprocessing
 import re
+import traceback
 import pickle
-import numpy as np
 import scipy
 import scipy.io
 import signal
 import time
-from pytz import timezone
 import hashlib
-from itertools import product, compress, chain
-import pprint as pprint_
+import functools
+import warnings
+import math
 import torch
-import json
+import numpy as np
+import pprint as pprint_
+from typing import Optional, Union
+from itertools import product, compress
+from vujade import vujade_debug as debug_
 
 
-def get_glob(_path: str, _ext_file: str) -> list:
-    return glob.glob('{}/*{}'.format(_path.replace('[', '[[]'), _ext_file))
+class DEBUG(object):
+    def __init__(self):
+        self.fileName = None
+        self.lineNumber = None
+        self.reTraceStack = re.compile('File \"(.+?)\", line (\d+?), .+')
+
+    def get_file_line(self):
+        for line in traceback.format_stack()[::-1]:
+            m = re.match(self.reTraceStack, line.strip())
+            if m:
+                fileName = m.groups()[0]
+
+                # ignore case
+                if fileName == __file__:
+                    continue
+                self.fileName = os.path.split(fileName)[1]
+                self.lineNumber = m.groups()[1]
+
+                return True
+
+        return False
 
 
-def cast_list(_list: list, _type: type = int) -> list:
-    return list(map(_type, _list)) # [_type(i) for i in _list]
+def deprecated(_func):
+    """
+    Usage: @utils_.deprecated
+           def test(_arg):
+               pass
+    Description: This is a decorator which can be used to mark functions as deprecated.
+                 It will result in a warning being emitted when the function is used.
+    Reference: https://pythonq.com/so/python/31146
+    """
+    @functools.wraps(_func)
+    def _wrapper(*args, **kwargs):
+        debug_info = DEBUG()
+        debug_info.get_file_line()
+        info_str = 'The deprecated function, {} is called.'.format(_func.__name__)
+        info_trace = '[{}: {}]: '.format(debug_info.fileName, debug_info.lineNumber) + info_str
 
-
-def check_element_type_list(_list: list, _type: type = int) -> bool:
-    return all(isinstance(idx, _type) for idx in _list)
-
-
-def list_matching_idx(_list_1: list, _list_2: list) -> list:
-    temp = set(_list_1)
-    return [i for i, val in enumerate(_list_2) if val in temp]
+        print_color(_str=info_trace, _color='WARNING')
+        warnings.simplefilter('always', DeprecationWarning)
+        warnings.warn(info_str,
+                      category=DeprecationWarning,
+                      stacklevel=2)
+        warnings.simplefilter('default', DeprecationWarning)
+        raise Exception
+        # return _func(*args, **kwargs)
+    return _wrapper
 
 
 def find_substr(_str_src: str, _str_sub: str) -> list:
     return [m.start() for m in re.finditer(_str_sub, _str_src)]
 
 
-def run_command_stdout(_command: list) -> (str, str):
-    pipe = subprocess.run(_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    str_stdout = pipe.stdout.decode('utf-8')
-    str_stderr = pipe.stderr.decode('utf-8')
+def get_stdout_stderr(_command: str) -> tuple:
+    pipe = subprocess.run(shlex.split(_command), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout = pipe.stdout
+    stderr = pipe.stderr
 
-    return str_stdout, str_stderr
+    return stdout, stderr
 
 
-def run_command(_command: str, _is_daemon: bool = False) -> dict:
-    if _is_daemon is True:
-        command = '{} &'.format(_command)
-    else:
-        command = '{}'.format(_command)
+def system_stdout(_str: str) -> None:
+    sys.stdout.write('\r'+_str)
 
-    res_command = os.system(command)
-    if res_command == 0:
-        res = get_pid_ppid(_command=_command)
-        res['is_success'] = True
-    else:
-        res = {}
-        res['is_success'] = False
+
+class SystemCommand(object):
+    """
+    Usage:
+        print('[MAIN] Start: {}'.format(utils_.getpid()))
+        cmd_1 = 'bash ./bash_test.sh'
+        cmd_2 = 'python3 ./test.py'
+        cmd = cmd_1 # or cmd_2
+        utils_.SystemCommand.run(_command=cmd, _is_daemon=False, _is_subprocess=True)
+        utils_.SystemCommand.run_timeout(_timeout_sec=5, _command=cmd, _is_daemon=False, _is_subprocess=True)
+        print('[MAIN] End: {}')
+    """
+    def __init__(self):
+        super(SystemCommand, self).__init__()
+
+    @classmethod
+    def run(cls, _command: str, _is_daemon: bool = False, _res: Optional[dict] = None, _is_subprocess: bool = True) -> bool:
+        if _is_daemon is True:
+            command = '{} &'.format(_command)
+        else:
+            command = '{}'.format(_command)
+
+        if _is_subprocess is True:
+            try:
+                p = subprocess.run(shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if p.returncode != 0:
+                    is_success = False
+                else:
+                    is_success = not b'Traceback' in p.stderr
+            except Exception as e:
+                is_success = False
+        else:
+            res_command = os.system(command)
+            if res_command == 0:
+                is_success = True
+            else:
+                is_success = False
+
+        if _res is not None:
+            _res['is_success'] = is_success
+
+        return is_success
+
+    @classmethod
+    def run_timeout(cls, _timeout_sec: int, _command: str, _is_daemon: bool = False, _is_subprocess: bool = True, _remove_single_quotation_mark: bool = True) -> Union[bool, str]:
+        timeout_sec = int(math.floor(_timeout_sec))
+
+        # Process spawning
+        manager = multiprocessing.Manager()
+        p_res = manager.dict()
+
+        p = multiprocessing.Process(name=_command, target=cls.run, args=(_command, _is_daemon, p_res, _is_subprocess))
+
+        p.start()
+        p.join(timeout=timeout_sec)
+
+        if p.is_alive():
+            # Time-out
+            # Get process information
+            proc_info = get_ps(_command=_command, _remove_single_quotation_mark=_remove_single_quotation_mark)
+            if proc_info is not None:
+                proc_parent = psutil.Process(int(proc_info['ppid']))
+                list_proc = [proc_parent]
+                for proc_child in proc_parent.children(recursive=True):
+                    list_proc.append(proc_child)
+
+                # Terminate process recursively
+                for proc in list_proc[::-1]:  # reverse
+                    proc.terminate()
+                res = 'time_out'
+            else:
+                raise ValueError('The proc_info should not be None.')
+        else:
+            # Time-in or cls.run() does not work. (i.e. runtime error)
+            if p_res['is_success'] is True:
+                # Time-in
+                res = True
+            else:
+                # cls.run() does not work. (i.e. runtime error)
+                res = 'runtime_error'
+
+        p.terminate()
+
+        if not res in {True, 'time_out', 'runtime_error'}:
+            raise ValueError('The return value, {} may be incorrect.'.format(res))
+
+        return res
+
+    @classmethod
+    def check_output(cls, _command: str, _split: bool = False, _shell: bool = False, _decode: bool = True) -> Union[str, bytes]:
+        if _split is True:
+            command = shlex.split(_command)
+        else:
+            command = _command
+
+        res = subprocess.check_output(command, shell=_shell)
+
+        if _decode is True:
+            res = res.decode('utf-8')
+
+        return res
+
+
+def grep_ps(_command: str, _remove_single_quotation_mark: bool = True) -> list:
+    if _remove_single_quotation_mark is True:
+        _command = _command.replace("'", "")
+
+    command = "ps -ef | grep '{}'".format(_command)
+    res_command = SystemCommand.check_output(_command=command, _split=False, _shell=True, _decode=False)
+    splitted_command = res_command.split(b'\n')
+
+    res = list()
+    for _idx, _command in enumerate(splitted_command):
+        ps_dict = dict()
+        ps_line = _command.decode('utf-8')
+        ps_list = shlex.split(ps_line)
+        if len(ps_list) != 0:
+            ps_dict['uid'] = ps_list[0]
+            ps_dict['pid'] = ps_list[1]
+            ps_dict['ppid'] = ps_list[2]
+            ps_dict['c'] = ps_list[3]
+            ps_dict['stime'] = ps_list[4]
+            ps_dict['tty'] = ps_list[5]
+            ps_dict['time'] = ps_list[6]
+            ps_dict['cmd'] = ' '.join(map(str, ps_list[7:]))
+            res.append(ps_dict)
+
+    return res
+
+
+def get_ps(_command: str, _remove_single_quotation_mark: bool = True) -> Optional[dict]:
+    if _remove_single_quotation_mark is True:
+        _command = _command.replace("'", "")
+
+    ps_list = grep_ps(_command=_command, _remove_single_quotation_mark=False)
+
+    res = None
+    for _idx, _ps in enumerate(ps_list):
+        if _command == _ps['cmd']:
+            res = _ps
 
     return res
 
@@ -127,7 +295,7 @@ def get_hash(_path_file: str, _hash: str = 'md5', _is_print: bool = True) -> str
     else:
         raise ValueError('The argument, _hash, may be incorrect.')
 
-    with open(_path_file, "rb") as f:
+    with open(_path_file, 'rb') as f:
         data = f.read()
         res = func(data).hexdigest()
 
@@ -151,18 +319,6 @@ def sys_exit(_msg: str = 'SUCCESS\n', _exit_code: int = 0) -> None:
 def pprint(_obj, _indent=1):
     pp = pprint_.PrettyPrinter(indent=_indent)
     pp.pprint(_obj)
-
-
-def unnest_list(_list):
-    return  list(chain(*_list))
-
-
-def get_filename_fileext(_path_file):
-    path_file = uppath(_path=_path_file, _n=1)
-    file_name, file_ext = os.path.splitext(_path_file)
-    file_name = file_name[len(path_file) + 1:]
-
-    return file_name, file_ext
 
 
 def is_ndarr(_var):
@@ -190,56 +346,15 @@ def bit2bool(_num, _n_bit):
     return ((_num >> _n_bit) & 1 == True)
 
 
-def get_idx_substr(_str: str, _str_sub: str, _n: int = 1, _is_reverse=False) -> int:
-    if _is_reverse is False:
-        res = _str.find(_str_sub)
-    else:
-        res = _str.rfind(_str_sub)
-
-    while res >= 0 and _n > 1:
-        if _is_reverse is False:
-            res = _str.find(_str_sub, res + len(_str_sub), -1)
-            _n -= 1
-        else:
-            res = _str.rfind(_str_sub, 0, res - len(_str_sub))
-            _n -= 1
-
-    return res
-
-
-def get_pid_ppid(_command: str) -> dict:
-    command = "ps -ef | grep '{}'".format(_command)
-    res_command = subprocess.check_output(command, shell=True).decode('utf-8')
-
-    pid = None
-    ppid = None
-    for line_command in res_command.split('\n'):
-        idx_find_command = get_idx_substr(_str=line_command, _str_sub=_command, _n=1)
-        idx_find_grep = get_idx_substr(_str=line_command, _str_sub='grep', _n=1)
-        if (idx_find_grep == -1) and (idx_find_command != -1):
-            idx_find_1 = get_idx_substr(_str=line_command, _str_sub=' ', _n=1)
-            idx_find_2 = get_idx_substr(_str=line_command, _str_sub=' ', _n=2)
-            idx_find_3 = get_idx_substr(_str=line_command, _str_sub=' ', _n=3)
-            pid = line_command[idx_find_1+1:idx_find_2]
-            ppid = line_command[idx_find_2+1:idx_find_3]
-
-    res = {'command': _command,
-           'pid': int(pid),
-           'ppid': int(ppid)
-           }
-
-    return res
-
-
 def getpid() -> int:
     return os.getpid()
 
 
-def getproc(_pid=getpid()):
+def getproc(_pid: int = getpid()) -> psutil.Process:
     return psutil.Process(_pid)
 
 
-def terminate_proc(_pid=getpid()):
+def terminate_proc(_pid: int = getpid()) -> None:
     p = psutil.Process(_pid)
     p.terminate()
 
@@ -256,24 +371,48 @@ def print_info(_var, _print_var=False):
         print('type: {}'.format(type(_var)))
 
 
-def print_color(_str, _bcolor='WARNING'):
-    bcolors = {'HEADER':'\033[95m',
-               'OKBLUE':'\033[94m',
-               'OKGREEN':'\033[92m',
-               'WARNING':'\033[93m',
-               'FATAL':'\033[91m',
-               'ENDC':'\033[0m',
-               'BOLD':'\033[1m',
-               'UNDERLINE':'\033[4m'}
-    print(bcolors[_bcolor] + _str + bcolors['ENDC'])
+def print_color(_str: str, _color: str = 'WARNING') -> None:
+    colors = {'PUPPLE':'\033[95m',
+              'BLUE':'\033[94m',
+              'GREEN':'\033[92m',
+              'WARNING':'\033[93m',
+              'FATAL':'\033[91m',
+              'ENDC':'\033[0m',
+              'BOLD':'\033[1m',
+              'UNDERLINE':'\033[4m'}
+    print(colors[_color] + _str + colors['ENDC'])
 
 
-def pause(_str='<Press enter/return to continue>'):
-    input(_str)
+def printf_color(_str: str, _color: str = 'WARNING', _is_pause: bool = True) -> None:
+    if _is_pause is False:
+        _print = print
+    else:
+        _print = input
+
+    debug_info = DEBUG()
+    debug_info.get_file_line()
+    info_trace = '[{}: {}]: '.format(debug_info.fileName, debug_info.lineNumber) + _str
+
+    colors = {'PUPPLE':'\033[95m',
+              'BLUE':'\033[94m',
+              'GREEN':'\033[92m',
+              'WARNING':'\033[93m',
+              'FATAL':'\033[91m',
+              'ENDC':'\033[0m',
+              'BOLD':'\033[1m',
+              'UNDERLINE':'\033[4m'}
+    _print(colors[_color] + info_trace + colors['ENDC'])
 
 
-def endl():
-    print("")
+def pause(_str: str = '<Press enter/return to continue>') -> None:
+    debug_info = DEBUG()
+    debug_info.get_file_line()
+    info_trace = '[{}: {}]: '.format(debug_info.fileName, debug_info.lineNumber) + _str
+    input(info_trace)
+
+
+def endl() -> None:
+    print('')
 
 
 def print_full_ndarray():
@@ -293,8 +432,12 @@ def get_device(_is_cuda):
     return device
 
 
-def set_seed(_device, _seed=1234):
+def set_seed(_device: str = 'cuda', _seed: int = 1234) -> None:
     device = str(_device)
+    try:
+        os.environ["PYTHONHASHSEED"] = str(_seed) # This code is valid when calling PYTHONHASHSEED=0 python3 *.py.
+    except Exception as e:
+        pass
     random.seed(_seed)
     np.random.seed(_seed)
     torch.manual_seed(_seed)
@@ -303,48 +446,6 @@ def set_seed(_device, _seed=1234):
         torch.cuda.manual_seed_all(_seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
-
-
-def get_datetime(_timezone=timezone('Asia/Seoul')) -> dict:
-    datetime_object = datetime.datetime.now(_timezone)
-    year = '{:02d}'.format(datetime_object.year % 2000)
-    month = '{:02d}'.format(datetime_object.month)
-    day = '{:02d}'.format(datetime_object.day)
-    hour = '{:02d}'.format(datetime_object.hour)
-    minute = '{:02d}'.format(datetime_object.minute)
-    second = '{:02d}'.format(datetime_object.second)
-
-    dict_datetime_curr = {'year': year,
-                          'month': month,
-                          'day': day,
-                          'hour': hour,
-                          'minute': minute,
-                          'second': second
-                          }
-    datetime_curr_default = year + month + day + hour + minute + second
-    datetime_curr_readable = '{}-{}-{} {}:{}:{}'.format(year, month, day, hour, minute, second)
-
-    res = {'dict': dict_datetime_curr,
-           'default': datetime_curr_default,
-           'readable': datetime_curr_readable
-           }
-
-    return res
-
-
-def uppath(_path, _n=1):
-    return os.sep.join(_path.split(os.sep)[:-_n])
-
-
-def get_filename_ext(_path, _type_return='split'):
-    filename_ext = _path[len(uppath(_path=_path, _n=1)) + 1:]
-    if _type_return == 'join':
-        return filename_ext
-    elif _type_return == 'split':
-        filename, ext = os.path.splitext(filename_ext)
-        return filename, ext
-    else:
-        raise NotImplementedError
 
 
 def var2mat(var_name, var):

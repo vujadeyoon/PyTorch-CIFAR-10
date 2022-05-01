@@ -1,6 +1,9 @@
 #!/bin/bash
 #
 #
+# Command: bash ./bash/bash_setup.sh
+#
+#
 path_curr=$(pwd)
 path_parent=$(dirname ${path_curr})
 path_cython_utils=${path_curr}/vujade/utils

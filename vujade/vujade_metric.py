@@ -1,6 +1,6 @@
 """
 Dveloper: vujadeyoon
-E-mail: sjyoon1671@gmail.com
+Email: vujadeyoon@gmail.com
 Github: https://github.com/vujadeyoon/vujade
 
 Title: vujade_metric.py
@@ -25,7 +25,7 @@ else:
 
 
 
-class BaseMetricMeter():
+class BaseMetricMeter(object):
     def __init__(self):
         self.initialized = False
         self.val = None
@@ -175,7 +175,7 @@ def ssim_matlab(_ndarr_input, _ndarr_ref, _multichannel=False, _win_size=11, _K1
         _multichannel=False
 
     if _multichannel is True:
-        utils_.print_color(_str='[WARNING]: It is recommend to use ssim_skimage instead of ssim_matlab for the multichannel option because of computational time.', _bcolor='WARNING')
+        utils_.print_color(_str='[WARNING]: It is recommend to use ssim_skimage instead of ssim_matlab for the multichannel option because of computational time.', _color='WARNING')
         cumsum_ssim = 0.0
         for idx_channel in range(_ndarr_input.shape[2]):
             cumsum_ssim += _ssim_matlab(_ndarr_input=_ndarr_input[:, :, idx_channel], _ndarr_ref=_ndarr_ref[:, :, idx_channel], _win_size=_win_size, _K1=_K1, _K2=_K2, _sigma=_sigma, _R=_R)
@@ -229,4 +229,26 @@ def _matlab_style_gauss2D(_shape=(3, 3), _sigma=0.5):
     sumh = h.sum()
     if sumh != 0:
         h /= sumh
+
     return h
+
+
+def get_iou(_ndarr_bbox_1, _ndarr_bbox_2):
+    # _ndarr_bbox = (x1, y1, x2, y2)
+    box1_area = (_ndarr_bbox_1[2] - _ndarr_bbox_1[0] + 1) * (_ndarr_bbox_1[3] - _ndarr_bbox_1[1] + 1)
+    box2_area = (_ndarr_bbox_2[2] - _ndarr_bbox_2[0] + 1) * (_ndarr_bbox_2[3] - _ndarr_bbox_2[1] + 1)
+
+    # obtain x1, y1, x2, y2 of the intersection
+    x1 = max(_ndarr_bbox_1[0], _ndarr_bbox_2[0])
+    y1 = max(_ndarr_bbox_1[1], _ndarr_bbox_2[1])
+    x2 = min(_ndarr_bbox_1[2], _ndarr_bbox_2[2])
+    y2 = min(_ndarr_bbox_1[3], _ndarr_bbox_2[3])
+
+    # compute the width and height of the intersection
+    w = max(0, x2 - x1 + 1)
+    h = max(0, y2 - y1 + 1)
+
+    inter = w * h
+    iou = inter / (box1_area + box2_area - inter)
+
+    return iou

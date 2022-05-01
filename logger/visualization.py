@@ -1,5 +1,6 @@
 import importlib
 from datetime import datetime
+from vujade.vujade_debug import printf
 
 
 class TensorboardWriter():
@@ -31,11 +32,15 @@ class TensorboardWriter():
         self.mode = ''
 
         self.tb_writer_ftns = {
-            'add_scalar', 'add_scalars', 'add_image', 'add_images', 'add_audio',
-            'add_text', 'add_histogram', 'add_pr_curve', 'add_embedding'
+            'add_scalar', 'add_scalars', 'add_image', 'add_images', 'add_audio', 'add_text', 'add_pr_curve',
+            'add_histogram', 'add_embedding', 'add_hparams', 'add_graph'
         }
-        self.tag_mode_exceptions = {'add_histogram', 'add_embedding'}
+        self.tag_mode_exceptions = {'add_histogram', 'add_embedding', 'add_hparams', 'add_graph'}
+        self.no_global_step = {'add_hparams', 'add_graph'}
         self.timer = datetime.now()
+
+        if self.tb_writer_ftns.issuperset(self.tag_mode_exceptions | self.no_global_step) is False:
+            raise ValueError('There may be an error for self.tb_writer_ftns.')
 
     def set_step(self, step, mode='train'):
         self.mode = mode
@@ -59,10 +64,13 @@ class TensorboardWriter():
 
             def wrapper(tag, data, *args, **kwargs):
                 if add_data is not None:
+                    # add global_step in the kwargs.
+                    if (name not in self.no_global_step) and ('global_step' not in kwargs.keys()):
+                        kwargs.update({'global_step': self.step})
                     # add mode(train/valid) tag
                     if name not in self.tag_mode_exceptions:
                         tag = '{}/{}'.format(tag, self.mode)
-                    add_data(tag, data, self.step, *args, **kwargs)
+                    add_data(tag, data, *args, **kwargs)
             return wrapper
         else:
             # default action for returning methods defined in this class, set_step() for instance.

@@ -5,7 +5,7 @@ from functools import reduce, partial
 from operator import getitem
 from datetime import datetime
 from logger import setup_logging
-from utils import read_json, write_json
+from utils import read_yaml, write_yaml
 
 
 class ConfigParser:
@@ -13,7 +13,7 @@ class ConfigParser:
         """
         class to parse configuration json file. Handles hyperparameters for training, initializations of modules, checkpoint saving
         and logging module.
-        :param config: Dict containing configurations, hyperparameters for training. contents of `config.json` file for example.
+        :param config: Dict containing configurations, hyperparameters for training. contents of `config.yaml` file for example.
         :param resume: String, path to the checkpoint being loaded.
         :param modification: Dict keychain:value, specifying position values to be replaced from config dict.
         :param run_id: Unique Identifier for training processes. Used to save checkpoints and training log. Timestamp is being used as default
@@ -28,24 +28,28 @@ class ConfigParser:
 
         exper_name = self.config['name']
         if run_id is None: # use timestamp as default run-id
-            run_id = datetime.now().strftime(r'%y%m%d_%H%M%S')
-        self._save_dir = save_dir / exper_name / run_id
-        self._log_dir = log_dir / exper_name / run_id
+            self._run_id = datetime.now().strftime(r'%y%m%d_%H%M%S')
+        else:
+            self._run_id = run_id
+        self._save_dir = save_dir / exper_name / self._run_id
+        self._log_dir = log_dir / exper_name / self._run_id
 
         # make directory for saving checkpoints and log.
-        exist_ok = run_id == ''
+        exist_ok = self._run_id == 'exist_ok'
         self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
         self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
 
         # save updated config file to the checkpoint dir
-        write_json(self.config, self.save_dir / 'config.json')
+        write_yaml(self.config, self.save_dir / 'config.yaml')
 
         # configure logging module
-        setup_logging(self.log_dir)
+        self.log_config = setup_logging(self.log_dir)
         self.log_levels = {
-            0: logging.WARNING,
-            1: logging.INFO,
-            2: logging.DEBUG
+            0: logging.INFO,
+            1: logging.DEBUG,
+            2: logging.WARNING,
+            3: logging.ERROR,
+            4: logging.CRITICAL
         }
 
     @classmethod
@@ -62,21 +66,21 @@ class ConfigParser:
             os.environ["CUDA_VISIBLE_DEVICES"] = args.device
         if args.resume is not None:
             resume = Path(args.resume)
-            cfg_fname = resume.parent / 'config.json'
+            cfg_fname = resume.parent / 'config.yaml'
         else:
-            msg_no_cfg = "Configuration file need to be specified. Add '-c config.json', for example."
+            msg_no_cfg = "Configuration file need to be specified. Add '-c config.yaml', for example."
             assert args.config is not None, msg_no_cfg
             resume = None
             cfg_fname = Path(args.config)
-        
-        config = read_json(cfg_fname)
+
+        config = read_yaml(cfg_fname)
         if args.config and resume:
             # update new config for fine-tuning
-            config.update(read_json(args.config))
+            config.update(read_yaml(args.config))
 
         # parse custom cli options into dictionary
         modification = {opt.target : getattr(args, _get_opt_name(opt.flags)) for opt in options}
-        res = cls(config, resume, modification)
+        res = cls(config, resume, modification, args.run_id)
 
         if res['trainer']['is_cuda'] is False:
             res['trainer']['is_amp'] = False
@@ -92,11 +96,29 @@ class ConfigParser:
         is equivalent to
         `object = module.name(a, b=1)`
         """
-        module_name = self[name]['type']
-        module_args = dict(self[name]['args'])
-        assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
-        module_args.update(kwargs)
-        return getattr(module, module_name)(*args, **module_args)
+        if isinstance(name, str):
+            module_name = self[name]['type']
+            if 'args' in self[name].keys():
+                module_args = dict(self[name]['args'])
+                assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
+                module_args.update(kwargs)
+                res = getattr(module, module_name)(*args, **module_args)
+            else:
+                res = getattr(module, module_name)(*args)
+        else:
+            # elif isinstance(name, tuple):
+            kinds = name[0]
+            name = name[1]
+            module_name = self[kinds][name]['type']
+            if 'args' in self[kinds][name].keys():
+                module_args = dict(self[kinds][name]['args'])
+                assert all([k not in module_args for k in kwargs]), 'Overwriting kwargs given in config file is not allowed'
+                module_args.update(kwargs)
+                res = getattr(module, module_name)(*args, **module_args)
+            else:
+                res = getattr(module, module_name)(*args)
+
+        return res
 
     def init_ftn(self, name, module, *args, **kwargs):
         """
@@ -117,7 +139,7 @@ class ConfigParser:
         """Access items like ordinary dict."""
         return self.config[name]
 
-    def get_logger(self, name, verbosity=2):
+    def get_logger(self, name, verbosity=1):
         msg_verbosity = 'verbosity option {} is invalid. Valid options are {}.'.format(verbosity, self.log_levels.keys())
         assert verbosity in self.log_levels, msg_verbosity
         logger = logging.getLogger(name)
@@ -136,6 +158,10 @@ class ConfigParser:
     @property
     def log_dir(self):
         return self._log_dir
+
+    @property
+    def run_id(self):
+        return self._run_id
 
 
 # helper functions to update config dict with custom cli options

@@ -2,17 +2,18 @@ import torch
 import torch.nn as nn
 import torchsummary
 from abc import abstractmethod
-from vujade.vujade_flops_counter import add_flops_counting_methods, flops_to_string
+from vujade import vujade_flops_counter as flops_counter_
+from vujade.vujade_debug import printf
 
 
 class BaseModel(nn.Module):
     """
     Base class for all models
     """
-    def __init__(self):
+    def __init__(self) -> None:
         super(BaseModel, self).__init__()
 
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Model prints with number of trainable parameters
         """
@@ -20,7 +21,7 @@ class BaseModel(nn.Module):
         return super().__str__() + '\nTrainable parameters: {}'.format(params)
 
     @abstractmethod
-    def forward(self, *inputs):
+    def forward(self, *inputs) -> None:
         """
         Forward pass logic
 
@@ -28,13 +29,18 @@ class BaseModel(nn.Module):
         """
         raise NotImplementedError
 
-    def _init_weights(self):
-        print('The model name: {}.'.format(self.__class__.__name__))
-        print('The weights of model are initialized.')
+    def _init_weights(self, _nonlinearity: str = 'leaky_relu') -> None:
+        printf('The model name: {}.'.format(self.__class__.__name__), _is_pause=False)
+        printf('The weights of model are initialized.', _is_pause=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
-                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if _nonlinearity == 'leaky_relu':
+                    nn.init.kaiming_normal_(m.weight, a=1, mode='fan_in', nonlinearity=_nonlinearity)
+                elif _nonlinearity == 'relu':
+                    nn.init.kaiming_normal_(m.weight, a=0, mode='fan_out', nonlinearity='relu')
+                else:
+                    raise NotImplementedError('The _nonlinearity, {} in the _init_weights() has not been supported yet.'.format(_nonlinearity))
                 if m.bias is not None:
                     m.bias.data.zero_()
             elif isinstance(m, nn.Linear):
@@ -44,7 +50,7 @@ class BaseModel(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def _init_weights_kaming_normal(self, _scale=1.0, _a=0, _mode='fan_in', _nonlinearity='leaky_relu'):
+    def _init_weights_kaming_normal(self, _scale: float = 1.0, _a: int = 0, _mode: str = 'fan_in', _nonlinearity: str = 'leaky_relu') -> None:
         """
         Principle:
             1) Output feature map should be gaussian distribution with zero-mean and small standard deviation
@@ -65,8 +71,8 @@ class BaseModel(nn.Module):
             1) Xavier initialization: sigmoid and Tanh activation function
             2) Kaming He initialization: ReLU activation function
         """
-        print('The model name: {}.'.format(self.__class__.__name__))
-        print('The weights of model are initialized.')
+        printf('The model name: {}.'.format(self.__class__.__name__), _is_pause=False)
+        printf('The weights of model are initialized.', _is_pause=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -87,23 +93,34 @@ class BaseModel(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-    def summary(self, _input_shape, _batch_size=1, _device='cpu', _is_summary=True):
-        print('{} Network summary.'.format(self.__class__.__name__))
+    def summary(self, _input_shape: tuple, _batch_size: int = 1, _device: str = 'cpu', _is_summary: bool = True) -> str:
+        if not _device in {'cpu', 'gpu'}:
+            raise ValueError
+
+        if isinstance(_input_shape, tuple) is False:
+            _input_shape = tuple(_input_shape)
+
+        printf('{} Network summary.'.format(self.__class__.__name__), _is_pause=False)
 
         if _is_summary is True:
             torchsummary.summary(self, input_size=_input_shape, batch_size=_batch_size, device=_device)
 
-        input = torch.randn([1, *_input_shape], dtype=torch.float).to(_device)
-        counter = add_flops_counting_methods(self)
+        tensor_input = torch.randn([1, *_input_shape], dtype=torch.float).to(_device)
+        counter = flops_counter_.add_flops_counting_methods(self)
         counter.eval().start_flops_count()
-        counter(input)
-        print('Input image resolution:     ({:d}, {:d}, {:d}, {:d})'.format(_batch_size, _input_shape[0], _input_shape[1], _input_shape[2]))
-        print('Trainable model parameters: {}'.format(self.count_parameters()))
-        print('Flops:                      {}'.format(flops_to_string(counter.compute_average_flops_cost())))
-        print('----------------------------------------------------------------')
+        counter(tensor_input)
+        str_1 = 'Input image resolution: ({}, {}, {}, {})'.format(_batch_size, *_input_shape)
+        str_2 = 'Trainable model parameters: {}'.format(self.count_parameters())
+        str_3 = 'Flops: {}'.format(flops_counter_.flops_to_string(counter.compute_average_flops_cost()))
+        printf(str_1, _is_pause=False)
+        printf(str_2, _is_pause=False)
+        printf(str_3, _is_pause=False)
+        printf('----------------------------------------------------------------', _is_pause=False)
 
-    def count_parameters(self):
+        return '{}; {}; {}.'.format(str_1, str_2, str_3)
+
+    def count_parameters(self) -> int:
         # Another option
-        # model_parameters = filter(lambda p: p.requires_grad, self.parameters())
+        # return filter(lambda p: p.requires_grad, self.parameters())
         # return sum([np.prod(p.size()) for p in model_parameters])
         return sum(p.numel() for p in self.parameters() if p.requires_grad)

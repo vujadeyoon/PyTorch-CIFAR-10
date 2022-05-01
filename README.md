@@ -90,6 +90,8 @@
 - [ ] Support learning rate finder
 - [ ] Improve logger
 - [ ] Support TensorRT
+- [ ] 41dc06f (Dec. 15, 2020)
+- [ ] Check SEED
 
 
 ## 9. License <a name="license"></a>

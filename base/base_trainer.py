@@ -3,25 +3,36 @@ import torch
 from abc import abstractmethod
 from numpy import inf
 from logger import TensorboardWriter
+from model import model as module_arch
+from vujade import vujade_slack as slack_
+from vujade.vujade_debug import printf
 
 
 class BaseTrainer:
     """
     Base class for all trainers
     """
-    def __init__(self, model, criterion, metric_ftns, optimizer, config):
-        self.config = config
-        self.logger = config.get_logger('trainer', config['trainer']['verbosity'])
-
+    def __init__(self, model, criterions, metric_ftns, optimizer, config, device):
         self.model = model
-        self.criterion = criterion
+        self.criterions = criterions
         self.metric_ftns = metric_ftns
         self.optimizer = optimizer
+        self.config = config
+        self.device = device
 
-        cfg_trainer = config['trainer']
+        self.hpp = HyperParamsPerformance(_config=self.config)
+        self.logger = self.config.get_logger('trainer', self.config['trainer']['verbosity'])
+        cfg_trainer = self.config['trainer']
         self.epochs = cfg_trainer['epochs']
         self.save_period = cfg_trainer['save_period']
         self.monitor = cfg_trainer.get('monitor', 'off')
+        self.name_dataset = self.config['name']
+        self.run_id = self.config.run_id
+        self.slack = slack_.Slack(_token_usr=self.config['slack']['token_usr'],
+                                  _token_bot=self.config['slack']['token_bot'],
+                                  _channel=self.config['slack']['channel'],
+                                  _is_time=self.config['slack']['is_time'],
+                                  _is_debug=self.config['slack']['is_debug'])
 
         # configuration to monitor model performance and save best
         if self.monitor == 'off':
@@ -38,13 +49,26 @@ class BaseTrainer:
 
         self.start_epoch = 1
 
-        self.checkpoint_dir = config.save_dir
+        self.checkpoint_dir = self.config.save_dir
 
         # setup visualization writer instance
-        self.writer = TensorboardWriter(config.log_dir, self.logger, config['visualization']['tensorboard'])
+        self.writer = TensorboardWriter(self.config.log_dir, self.logger, self.config['visualization']['tensorboard'])
+        self._add_graph()
+        self._write_description()
 
-        if config.resume is not None:
-            self._resume_checkpoint(config.resume)
+        if self.config.resume is not None:
+            self._resume_checkpoint(self.config.resume)
+
+        self.num_epochs = (self.epochs + 1) - self.start_epoch
+
+    def _add_graph(self):
+        model = self.config.init_obj('arch', module_arch)
+        tensor_size = self.config['train_loader']['args']['size'].copy()
+        tensor_temp = torch.zeros(1, *tensor_size)
+        self.writer.add_graph(model, tensor_temp)
+
+    def _write_description(self):
+        self.writer.add_text('Train', input('Input the description for {}: '.format(self.run_id)))
 
     @abstractmethod
     def _train_epoch(self, epoch):
@@ -79,8 +103,7 @@ class BaseTrainer:
                     improved = (self.mnt_mode == 'min' and log[self.mnt_metric] <= self.mnt_best) or \
                                (self.mnt_mode == 'max' and log[self.mnt_metric] >= self.mnt_best)
                 except KeyError:
-                    self.logger.warning("Warning: Metric '{}' is not found. "
-                                        "Model performance monitoring is disabled.".format(self.mnt_metric))
+                    self.logger.warning("Warning: Metric '{}' is not found. Model performance monitoring is disabled.".format(self.mnt_metric))
                     self.mnt_mode = 'off'
                     improved = False
 
@@ -88,16 +111,18 @@ class BaseTrainer:
                     self.mnt_best = log[self.mnt_metric]
                     not_improved_count = 0
                     best = True
+                    self.hpp.update(_log=log)
                 else:
                     not_improved_count += 1
 
                 if not_improved_count > self.early_stop:
-                    self.logger.info("Validation performance didn\'t improve for {} epochs. "
-                                     "Training stops.".format(self.early_stop))
+                    self.logger.info("Validation performance didn\'t improve for {} epochs. Training stops.".format(self.early_stop))
                     break
 
             if epoch % self.save_period == 0:
                 self._save_checkpoint(epoch, save_best=best)
+
+        self.writer.add_hparams(self.hpp.get_hparams(), self.hpp.best, run_name=self.config['hparam']['run_name'])
 
     def _save_checkpoint(self, epoch, save_best=False):
         """
@@ -150,3 +175,38 @@ class BaseTrainer:
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
         self.logger.info("Checkpoint loaded. Resume training from epoch {}".format(self.start_epoch))
+
+
+class HyperParamsPerformance(object):
+    def __init__(self, _config) -> None:
+        super(HyperParamsPerformance, self).__init__()
+        self.config = _config
+        self.key_metric = self.config['hparam']['key_metric']
+        self.best = {key: None for key in self.key_metric}
+
+    def update(self, _log: dict):
+        for _idx, (_key_metric) in enumerate(self.key_metric):
+            self.best[_key_metric] = _log[_key_metric]
+
+    def get_hparams(self) -> dict:
+        try:
+            res = {
+                'name_dataset': self.config['name'],
+                'model': self.config['arch']['type'],
+                'epoch': self.config['trainer']['epochs'],
+                'bsize_train': self.config['train_loader']['args']['batch_size'],
+                'lrs_warmup_alogrithm': self.config['lr_scheduler']['warmup_alogrithm'],
+                'lrs_warmup_epoch': self.config['lr_scheduler']['warmup_epoch'],
+                'lrs_warmup_lr': self.config['lr_scheduler']['warmup_lr'],
+                'lrs_name': self.config['lr_scheduler']['type'],
+                'lrs_epoch': self.config['lr_scheduler']['args']['T_max'],
+                'opt_name': self.config['optimizer']['type'],
+                'opt_lr': self.config['optimizer']['args']['lr'],
+                'opt_momentum': self.config['optimizer']['args']['momentum'],
+                'opt_weight_decay': self.config['optimizer']['args']['weight_decay'],
+                'loss_name': self.config['loss']['type'],
+            }
+        except Exception as e:
+            raise ValueError('Some values of the _get_hparams() may be incorrect. Error: {}'.format(e))
+
+        return res
