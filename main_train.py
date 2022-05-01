@@ -89,7 +89,7 @@ def _main(config):
 
     trainer = Trainer(model=model,
                       criterions=criterions,
-                      metric_ftns=metrics_ftn,
+                      metrics_ftn=metrics_ftn,
                       optimizer=optimizer,
                       config=config,
                       device=device,
