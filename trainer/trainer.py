@@ -14,9 +14,9 @@ class Trainer(BaseTrainer):
     """
     Trainer class
     """
-    def __init__(self, model, criterions, metric_ftns, optimizer, config, device,
+    def __init__(self, model, criterions, metrics_ftn, optimizer, config, device,
                  dataloader_train, dataloader_valid=None, lr_scheduler=None, len_epoch=None):
-        super().__init__(model, criterions, metric_ftns, optimizer, config, device)
+        super().__init__(model, criterions, metrics_ftn, optimizer, config, device)
         self.dataloader_train = dataloader_train
         if len_epoch is None:
             # epoch-based training
@@ -35,8 +35,8 @@ class Trainer(BaseTrainer):
         self.num_iter_max = self.len_epoch * (self.epochs - 1) + self.len_epoch
         self.loss_wieght = np.cos(np.linspace(0, np.pi / 2, self.num_iter_max))
 
-        self.metric_train = MetricTracker('loss', 'lr', *[m.__class__.__name__ for m in self.metric_ftns], writer=self.writer)
-        self.metric_valid = MetricTracker('loss', 'lr', *[m.__class__.__name__ for m in self.metric_ftns], writer=self.writer)
+        self.metrics_train = MetricTracker('loss', 'lr', *[m.__class__.__name__ for m in self.metrics_ftn], writer=self.writer)
+        self.metrics_valid = MetricTracker('loss', 'lr', *[m.__class__.__name__ for m in self.metrics_ftn], writer=self.writer)
 
         if self.config['trainer']['is_amp'] is True:
             self.scaler = torch.cuda.amp.GradScaler()
@@ -59,7 +59,7 @@ class Trainer(BaseTrainer):
         :return: A log that contains average loss and metric in this epoch.
         """
         self.model.train()
-        self.metric_train.reset()
+        self.metrics_train.reset()
 
         if self.lr_scheduler is not None:
             self.lr_scheduler.step()
@@ -89,11 +89,12 @@ class Trainer(BaseTrainer):
                 loss.backward()
                 self.optimizer.step()
 
+            # Update metric for iteration.
             self.writer.set_step(num_iter_curr)
-            self.metric_train.update('lr', self.optimizer.param_groups[0]['lr'])
-            self.metric_train.update('loss', loss.item())
-            for met in self.metric_ftns:
-                self.metric_train.update(met.__class__.__name__, met(output, target))
+            self.metrics_train.update('lr', self.optimizer.param_groups[0]['lr'])
+            self.metrics_train.update('loss', loss.item())
+            for met in self.metrics_ftn:
+                self.metrics_train.update(met.__class__.__name__, met(output, target))
 
             self.eta.toc(_is_train=True)
             self.time_eta = self.eta.get(_num_iter_curr=num_iter_curr)
@@ -104,7 +105,7 @@ class Trainer(BaseTrainer):
             if _idx_batch == self.len_epoch:
                 break
 
-        log = self.metric_train.result()
+        log = self.metrics_train.result()
 
         if self.do_validation:
             self.eta.tic(_is_train=False)
@@ -121,8 +122,7 @@ class Trainer(BaseTrainer):
         :return: A log that contains information about validation
         """
         self.model.eval()
-        self.metric_valid.reset()
-        loss_cumsum = 0.0
+        self.metrics_valid.reset()
 
         with torch.no_grad():
             for _idx_batch, (_data, _target) in enumerate(self.dataloader_valid):
@@ -130,7 +130,6 @@ class Trainer(BaseTrainer):
                 output = self.model(data)
                 num_iter_curr = self.len_epoch * (epoch - 1) + self.len_epoch
                 loss = self.criterions(output, target)
-                loss_cumsum += loss.item()
 
                 if _idx_batch < (self.params_vis['ncol'] * self.params_vis['nrow']):
                     if _idx_batch == 0:
@@ -141,19 +140,26 @@ class Trainer(BaseTrainer):
 
                 self.writer.set_step((epoch - 1) * len(self.dataloader_valid) + _idx_batch, 'valid')
 
-        # Update metric
+                # Update metric for iteration.
+                self.metrics_valid.update('loss', loss.item(), is_add_scalar=False)
+                for met in self.metrics_ftn:
+                    self.metrics_valid.update(met.__class__.__name__, met(output, target), is_add_scalar=False)
+
+        # Update metric for epoch.
         self.writer.set_step(epoch, 'valid')
-        self.metric_valid.update('lr', self.optimizer.param_groups[0]['lr'])
-        self.metric_valid.update('loss', loss_cumsum / len(self.dataloader_valid))
-        for met in self.metric_ftns:
-            self.metric_valid.update(met.__class__.__name__, met(output, target))
+        self.metrics_valid.update('lr', self.optimizer.param_groups[0]['lr'])
+        self.metrics_valid.add_scalar(key='loss', value=self.metrics_valid.avg(key='loss'))
+        for met in self.metrics_ftn:
+            key = met.__class__.__name__
+            self.metrics_valid.add_scalar(key=key, value=self.metrics_valid.avg(key=key))
+
 
         self.writer.add_image('data', make_grid(tensor_vis, nrow=self.params_vis['ncol'], normalize=self.params_vis['is_torchvision_norm']), dataformats=self.params_vis['dataformats'])
 
         # Post messages for the slack
         if self.config['slack']['is_slack'] is True:
             msg = '[Valid: {}/{}] Loss: {:.2f}; '.format(epoch, self.epochs, loss_cumsum / len(self.dataloader_valid))
-            for met in self.metric_ftns:
+            for met in self.metrics_ftn:
                 msg += '{}: {}; '.format(met.__class__.__name__, met(output, target))
             msg += 'ETA: {}.'.format(self.time_eta)
 
@@ -161,7 +167,7 @@ class Trainer(BaseTrainer):
         for name, p in self.model.named_parameters():
             self.writer.add_histogram(name, p, bins='auto')
 
-        return self.metric_valid.result()
+        return self.metrics_valid.result()
 
     def _progress(self, _idx_batch):
         base = '[{}/{} ({:.0f}%)]'

@@ -12,10 +12,10 @@ class BaseTrainer:
     """
     Base class for all trainers
     """
-    def __init__(self, model, criterions, metric_ftns, optimizer, config, device):
+    def __init__(self, model, criterions, metrics_ftn, optimizer, config, device):
         self.model = model
         self.criterions = criterions
-        self.metric_ftns = metric_ftns
+        self.metrics_ftn = metrics_ftn
         self.optimizer = optimizer
         self.config = config
         self.device = device

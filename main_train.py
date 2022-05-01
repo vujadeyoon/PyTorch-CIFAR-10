@@ -76,7 +76,7 @@ def _main(config):
 
     # get function handles of loss and metrics
     criterions = config.init_obj('loss', module_loss).to(device)
-    metrics = [config.init_obj(('metric', met), module_metric) for met in config['metric']]
+    metrics_ftn = [config.init_obj(('metric', met), module_metric) for met in config['metric']]
 
     # build optimizer, learning rate scheduler. delete every lines containing lr_scheduler for disabling scheduler
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
@@ -89,7 +89,7 @@ def _main(config):
 
     trainer = Trainer(model=model,
                       criterions=criterions,
-                      metric_ftns=metrics,
+                      metric_ftns=metrics_ftn,
                       optimizer=optimizer,
                       config=config,
                       device=device,

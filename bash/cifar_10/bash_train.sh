@@ -29,4 +29,4 @@ PYTHONHASHSEED=0 python3 ${path_curr}/main_train.py --device ${device} \
                                                     --run_id ${run_id}
 #
 #
-# bash ./bash/cifar_10/bash_test.sh ${device} saved/model/cifar_10/${run_id}/config.yaml saved/model/cifar_10/${run_id}/ckpt-best.pth false false exist_ok
+bash ./bash/cifar_10/bash_test.sh ${device} saved/model/CIFAR_10/${run_id}/config.yaml saved/model/CIFAR_10/${run_id}/ckpt-best.pth false false exist_ok

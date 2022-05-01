@@ -74,12 +74,15 @@ class MetricTracker:
         for col in self._data.columns:
             self._data[col].values[:] = 0
 
-    def update(self, key, value, n=1):
-        if self.writer is not None:
-            self.writer.add_scalar(key, value)
+    def update(self, key, value, n=1, is_add_scalar: bool = True):
+        if (self.writer is not None) and (is_add_scalar is True):
+            self.add_scalar(key=key, value=value)
         self._data.total[key] += value * n
         self._data.counts[key] += n
         self._data.average[key] = self._data.total[key] / self._data.counts[key]
+
+    def add_scalar(self, key, value):
+        self.writer.add_scalar(key, value)
 
     def avg(self, key):
         return self._data.average[key]
