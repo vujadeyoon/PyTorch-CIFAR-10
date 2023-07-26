@@ -1,8 +1,8 @@
 name: CIFAR_10
-n_gpu: 1
+run_id: exist_ok
 backup:
   is_backup: true
-  cmd: tar -czvf {SPATH_BACKUP} --exclude ./.git --exclude ./saved .
+  cmd: tar -czvf ${trainer.model_dir}/${name}/${run_id}/backup.tar.gz --exclude ./.git --exclude ./saved .
 arch:
   type: ResNet_18_2
   args:
@@ -11,7 +11,7 @@ train_loader:
   type: ClassificationDataLoader
   args:
     spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_train.csv
-    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_train/
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_train
     is_train: true
     size: [3, 32, 32]
     padding: 4
@@ -23,35 +23,35 @@ train_loader:
     n_workers: 4
     pin_memory: true
 valid_loader:
-  type: ClassificationDataLoader
+  type: ${train_loader.type}
   args:
     spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_test.csv
-    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_test/
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_test
     is_train: false
-    size: [3, 32, 32]
+    size: ${train_loader.args.size}
     padding: 0
     prob_flip: 0.0
-    mean: [0.4914, 0.4822, 0.4465]
-    std: [0.2023, 0.1994, 0.2010]
+    mean: ${train_loader.args.mean}
+    std: ${train_loader.args.std}
     shuffle: false
     batch_size: 100
     n_workers: 4
     pin_memory: true
 test_loader:
-  type: ClassificationDataLoader
+  type: ${valid_loader.type}
   args:
     spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_test.csv
-    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_test/
-    is_train: false
-    size: [3, 32, 32]
-    padding: 0
-    prob_flip: 0.0
-    mean: [0.4914, 0.4822, 0.4465]
-    std: [0.2023, 0.1994, 0.2010]
-    shuffle: false
-    batch_size: 100
-    n_workers: 4
-    pin_memory: true
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_test
+    is_train: ${valid_loader.args.is_train}
+    size: ${valid_loader.args.size}
+    padding: ${valid_loader.args.padding}
+    prob_flip: ${valid_loader.args.prob_flip}
+    mean: ${valid_loader.args.mean}
+    std: ${valid_loader.args.std}
+    shuffle: ${valid_loader.args.shuffle}
+    batch_size: ${valid_loader.args.batch_size}
+    n_workers: ${valid_loader.args.n_workers}
+    pin_memory: ${valid_loader.args.pin_memory}
 lr_scheduler:
   warmup_alogrithm: Multiplicative
   warmup_epoch: -1
@@ -68,7 +68,7 @@ optimizer:
 loss:
   type: CrossEntropy
   args:
-    _class_ignore: 255
+    _class_ignore: -1
     _reduction: mean
 metric:
   metric_1:
@@ -78,11 +78,12 @@ metric:
     args:
       _k: 3
 trainer:
-  is_amp: true
   is_cuda: true
+  is_use_deterministic_algorithm: false
+  is_amp: true
   seed: 1234
   epochs: 200
-  model_dir: ./saved/model/
+  model_dir: ./saved/model
   save_period: 1
   verbosity: 1
   monitor: min val_loss
@@ -90,13 +91,13 @@ trainer:
   log_step: 1
 visualization:
   tensorboard: true
-  log_dir: ./saved/log/
+  log_dir: ./saved/log
   nrow: 1
   ncol: 2
   idx_picture: 0
   normalize:
-    mean: [0.4914, 0.4822, 0.4465]
-    std: [0.2023, 0.1994, 0.2010]
+    mean: ${train_loader.args.mean}
+    std: ${train_loader.args.std}
   dataformats: CHW
 hparam:
   run_name: HyperParams_Result
@@ -110,14 +111,14 @@ summary:
     units_flops: GFlop
     units_params: None
     precision: 2
-    input_resolution: [3, 32, 32]
+    input_resolution: ${train_loader.args.size}
     print_per_layer_stat: false
     as_strings: true
     verbose: false
 slack:
   is_slack: false
-  token_usr: xoxp-2693953505635-2687219708646-2691288389205-f9c6d4eb12660eb70fbb9816cd646b7b
-  token_bot: xoxb-2693953505635-2691254873461-k5pARFSSoS6y1721mBhvs2Br
-  channel: face_parsing
+  token_usr: ${oc.env:SLACK_TOKEN_USR, None}
+  token_bot: ${oc.env:SLACK_TOKEN_BOT, None}
+  channel: research
   is_time: true
   is_debug: false

@@ -1,11 +1,7 @@
 import argparse
-import torchvision
-from model.backbone import resnet
-from model.model_8 import FaceParser
-# from model.others.EAGRNet.networks.EAGR import EAGRNet
-# from model.others.ibugRTN.ibug.face_parsing import SegmentationModel as ibgSegmentationModel
-from vujade import vujade_dnn as dnn_
-from vujade.vujade_debug import printf
+from model.model import ResNet_18_2
+from vujade import vujade_torch as torch_
+from vujade.vujade_debug import printd
 
 
 def get_args() -> argparse.Namespace:
@@ -24,35 +20,19 @@ if __name__=='__main__':
     if args.mode not in {'dev', 'analysis', 'summary'}:
         raise ValueError('The mode is not supported.')
 
-    input_res = (3, 512, 512)
-    num_classes = 11
+    input_res = (3, 32, 32)
+    num_class = 10
 
-    # model_eagr = EAGRNet(num_classes=num_classes).eval()
-    # model_rtn = ibgSegmentationModel(encoder='rtnet50', decoder='fcn', num_classes=num_classes)
-    # model_proposed = FaceParser(num_classes=num_classes, backbone_name='efficientnet_b0', backbone_pretrained=True).eval()
-    # model_proposed = FaceParser(num_classes=num_classes, backbone_name='resnet50', backbone_pretrained=True).eval()
-    model_proposed = FaceParser(num_classes=num_classes, backbone_name='resnet18', backbone_pretrained=True).eval()
+    model_proposed = ResNet_18_2(num_class=num_class).eval()
     model_proposed.eval()
 
     model = model_proposed
 
     if args.mode == 'dev':
-        dnn_.DNNComplexity(_model_cpu=model, _input_res=input_res).develop()
+        torch_.DNNComplexity(_model_cpu=model, _input_res=input_res).develop()
     elif args.mode == 'analysis':
-        dnn_.DNNComplexity(_model_cpu=model, _input_res=input_res).show()
+        torch_.DNNComplexity(_model_cpu=model, _input_res=input_res).show()
     elif args.mode == 'summary':
-        dnn_.DNNComplexity(_model_cpu=model, _input_res=input_res).summary()
+        torch_.DNNComplexity(_model_cpu=model, _input_res=input_res).summary()
     else:
         raise ValueError('The mode is not supported.')
-
-
-    # EAGRNet
-    # Trainable params.: 66.72 M
-    # Macs:              269.51 GMac
-    # Flops:             539.02 GFlop
-    #
-    #
-    # RTNet-50
-    # Trainable params.: 27.33 M
-    # Macs:              115.48GMac
-    # Flops:             230.96 GFlop

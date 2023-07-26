@@ -7,7 +7,7 @@ from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 from vujade import vujade_profiler as prof_
 from vujade import vujade_path as path_
-from vujade.vujade_debug import printf
+from vujade.vujade_debug import printd
 
 
 class Trainer(BaseTrainer):
@@ -69,8 +69,8 @@ class Trainer(BaseTrainer):
 
             # Debug
             data, target = _data.to(self.device), _target.to(self.device)
-            # printf('data: ', type(data), data.shape, data.dtype, data.device)           # [trainer.py: 69]: data:  <class 'torch.Tensor'> torch.Size([128, 3, 32, 32]) torch.float32 cuda:0
-            # printf('target: ', type(target), target.shape, target.dtype, target.device) # [trainer.py: 70]: target:  <class 'torch.Tensor'> torch.Size([128]) torch.int64 cuda:0
+            # printd('data: ', type(data), data.shape, data.dtype, data.device)           # [trainer.py: 69]: data:  <class 'torch.Tensor'> torch.Size([128, 3, 32, 32]) torch.float32 cuda:0
+            # printd('target: ', type(target), target.shape, target.dtype, target.device) # [trainer.py: 70]: target:  <class 'torch.Tensor'> torch.Size([128]) torch.int64 cuda:0
 
             self.optimizer.zero_grad()
 

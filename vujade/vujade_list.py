@@ -14,7 +14,15 @@ import random
 import numpy as np
 from typing import Any
 from collections import deque
-from vujade.vujade_debug import printf
+from vujade.vujade_debug import printd
+
+
+def remove_element(_list_src: list, _element_to_be_removed: list) -> list:
+    return [_ele for _ele in _list_src if _ele not in _element_to_be_removed]
+
+
+def sorted_set(_list: list) -> list:
+    return list(sorted(set(_list), key=_list.index))
 
 
 def remove_empty_element(_list: list) -> list:
@@ -78,9 +86,13 @@ def floor(_list: list, _decimals: int = 0) -> list:
     return list(map(lambda x: math.floor(offset * x) / offset, _list))
 
 
-def find(_list: list, _mached_element: Any) -> list:
-    return [x for x in _list if x == _mached_element]
+def find(_matched_element: Any, _list: list) -> list:
+    return [_ele for _ele in _list if _ele == _matched_element]
 
 
-def find_indices(_list: list, _mached_element: Any) -> list:
-    return [idx for idx, x in enumerate(_list) if x == _mached_element]
+def find_indices(_matched_element: Any, _list: list) -> list:
+    return [_idx for _idx, _ele in enumerate(_list) if _ele == _matched_element]
+
+
+def find_indices_in(_matched_element: Any, _list: list) -> list:
+    return [_idx for _idx, _ele in enumerate(_list) if _matched_element in _ele]

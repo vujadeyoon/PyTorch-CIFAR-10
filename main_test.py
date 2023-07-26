@@ -1,5 +1,5 @@
-import os
 import argparse
+import collections
 import torch
 import dataloader.classification as module_dataloader
 import loss.classification as module_loss
@@ -9,13 +9,15 @@ from utils import MetricTracker
 from tqdm import tqdm
 from config.parse_config import ConfigParser
 from vujade import vujade_path as path_
-from vujade import vujade_imgcv as imgcv_
 from vujade import vujade_str as str_
-from vujade.vujade_debug import printf
+from vujade import vujade_torch as torch_
+from vujade.vujade_debug import printd
 
 
-def _main(config, _args) -> None:
+def _main(config) -> None:
     logger = config.get_logger('test')
+
+    device, gpu_ids = torch_.PyTorchUtils.prepare_device(_is_cuda=config['trainer']['is_cuda'])
 
     # setup data_loader instances
     dataloader_test = config.init_obj('test_loader', module_dataloader).loader
@@ -28,11 +30,9 @@ def _main(config, _args) -> None:
 
     checkpoint = torch.load(config.resume)
     state_dict = checkpoint['state_dict']
-    if config['n_gpu'] > 1:
+    if 1 < len(gpu_ids):
         model = torch.nn.DataParallel(model)
     model.load_state_dict(state_dict)
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # get function handles of loss and metrics
     criterions = config.init_obj('loss', module_loss).to(device)
@@ -43,9 +43,6 @@ def _main(config, _args) -> None:
     model = model.to(device)
     model.eval()
     metrics_test.reset()
-
-    if args.is_save is True:
-        raise NotImplementedError('This option has not been supported yet.')
 
     with torch.no_grad():
         for _idx, (_data, _target) in enumerate(tqdm(dataloader_test)):
@@ -58,11 +55,8 @@ def _main(config, _args) -> None:
             for met in metrics_ftn:
                 metrics_test.update(met.__class__.__name__, met(output, target), is_add_scalar=False)
 
-            if args.is_save is True:
-                raise NotImplementedError('This option has not been supported yet.')
-
     log = {
-        'Run ID': _args.run_id,
+        'Run ID': config['run_id'],
         'Loss': metrics_test.avg(key='loss'),
         'Accuracy': metrics_test.avg(key='Accuracy'),
         'AccuarcyTopK': metrics_test.avg(key='AccuarcyTopK')
@@ -72,18 +66,20 @@ def _main(config, _args) -> None:
 
 
 if __name__ == '__main__':
-    ap = argparse.ArgumentParser(description='PyTorch FaceParsing: Testing')
+    ap = argparse.ArgumentParser(description='PyTorch Classification: Testing')
     ap.add_argument('--config', type=str, required=True, help='Path for the config file')
     ap.add_argument('--resume', type=str, required=True, help='Path for the checkpoint file')
-    ap.add_argument('--device', type=str, default='0', help='Indices of GPUs to enable')
     ap.add_argument('--is_log', type=str_.str2bool, default=False, help='Save log')
-    ap.add_argument('--is_save', type=str_.str2bool, default=False, help='Save result image')
-    ap.add_argument('--run_id', type=str, default=None, help='Run ID')
-    args = ap.parse_args()
 
-    config = ConfigParser.from_args(ap)
+    # custom cli options to modify configuration from default values given in json file.
+    CustomArgs = collections.namedtuple('CustomArgs', 'flags type target')
+    options = [
+        CustomArgs(['--run_id'], type=str, target='run_id')
+    ]
 
-    _main(config, _args=args)
+    config, args = ConfigParser.from_args(ap, options), ap.parse_args()
+
+    _main(config)
 
     if args.is_log is False:
         path_save_dir = path_.Path(_spath=str(config.save_dir))

@@ -11,6 +11,7 @@ Acknowledgement: This implementation is highly inspired from Berkeley CS188.
 
 
 import sys
+import getpass
 import inspect
 import heapq
 import random
@@ -35,13 +36,14 @@ import math
 import torch
 import numpy as np
 import pprint as pprint_
-from typing import Optional, Union
+from typing import Optional, Union, Tuple
 from itertools import product, compress
 from vujade import vujade_debug as debug_
 
 
 class DEBUG(object):
     def __init__(self):
+        super(DEBUG, self).__init__()
         self.fileName = None
         self.lineNumber = None
         self.reTraceStack = re.compile('File \"(.+?)\", line (\d+?), .+')
@@ -90,6 +92,10 @@ def deprecated(_func):
     return _wrapper
 
 
+def get_username() -> str:
+    return getpass.getuser()
+
+
 def find_substr(_str_src: str, _str_sub: str) -> list:
     return [m.start() for m in re.finditer(_str_sub, _str_src)]
 
@@ -117,11 +123,13 @@ class SystemCommand(object):
         utils_.SystemCommand.run_timeout(_timeout_sec=5, _command=cmd, _is_daemon=False, _is_subprocess=True)
         print('[MAIN] End: {}')
     """
+    result = None
+
     def __init__(self):
         super(SystemCommand, self).__init__()
 
     @classmethod
-    def run(cls, _command: str, _is_daemon: bool = False, _res: Optional[dict] = None, _is_subprocess: bool = True) -> bool:
+    def run(cls, _command: str, _is_daemon: bool = False, _res: Optional[dict] = None, _is_subprocess: bool = True) -> tuple:
         if _is_daemon is True:
             command = '{} &'.format(_command)
         else:
@@ -130,10 +138,13 @@ class SystemCommand(object):
         if _is_subprocess is True:
             try:
                 p = subprocess.run(shlex.split(command), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
                 if p.returncode != 0:
                     is_success = False
                 else:
                     is_success = not b'Traceback' in p.stderr
+                if is_success is True:
+                    cls.result = p.stdout
             except Exception as e:
                 is_success = False
         else:
@@ -146,7 +157,7 @@ class SystemCommand(object):
         if _res is not None:
             _res['is_success'] = is_success
 
-        return is_success
+        return is_success, cls.result
 
     @classmethod
     def run_timeout(cls, _timeout_sec: int, _command: str, _is_daemon: bool = False, _is_subprocess: bool = True, _remove_single_quotation_mark: bool = True) -> Union[bool, str]:
@@ -325,13 +336,15 @@ def is_ndarr(_var):
     return isinstance(_var, (np.ndarray, np.generic))
 
 
-def get_env_var(_name_var: str) -> str:
+def get_env_var(_name_var: str, _default: str = '', _is_raise_existed: bool = False) -> str:
     """This function is intended to get a system environmental variable.
 
         :param str _name_var: A name of the system environmental variable
         :returns: The corresponding value for the system environmental variable
     """
-    return os.environ.get(_name_var, '')
+    if (_is_raise_existed is True) and (_name_var not in os.environ):
+        raise ValueError('The environmental variable, {} is not existed.'.format(_name_var))
+    return os.environ.get(_name_var, _default)
 
 
 def get_command_cli(_prefix='python3 '):
@@ -383,27 +396,6 @@ def print_color(_str: str, _color: str = 'WARNING') -> None:
     print(colors[_color] + _str + colors['ENDC'])
 
 
-def printf_color(_str: str, _color: str = 'WARNING', _is_pause: bool = True) -> None:
-    if _is_pause is False:
-        _print = print
-    else:
-        _print = input
-
-    debug_info = DEBUG()
-    debug_info.get_file_line()
-    info_trace = '[{}: {}]: '.format(debug_info.fileName, debug_info.lineNumber) + _str
-
-    colors = {'PUPPLE':'\033[95m',
-              'BLUE':'\033[94m',
-              'GREEN':'\033[92m',
-              'WARNING':'\033[93m',
-              'FATAL':'\033[91m',
-              'ENDC':'\033[0m',
-              'BOLD':'\033[1m',
-              'UNDERLINE':'\033[4m'}
-    _print(colors[_color] + info_trace + colors['ENDC'])
-
-
 def pause(_str: str = '<Press enter/return to continue>') -> None:
     debug_info = DEBUG()
     debug_info.get_file_line()
@@ -432,20 +424,48 @@ def get_device(_is_cuda):
     return device
 
 
-def set_seed(_device: str = 'cuda', _seed: int = 1234) -> None:
-    device = str(_device)
-    try:
-        os.environ["PYTHONHASHSEED"] = str(_seed) # This code is valid when calling PYTHONHASHSEED=0 python3 *.py.
-    except Exception as e:
-        pass
-    random.seed(_seed)
-    np.random.seed(_seed)
-    torch.manual_seed(_seed)
-    if device == 'cuda':
-        torch.cuda.manual_seed(_seed)
-        torch.cuda.manual_seed_all(_seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
+class SetSeed(object):
+    seed = 1234
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    generator = torch.Generator()
+
+    @classmethod
+    def _set_device(cls, _device: Optional[torch.device] = None) -> None:
+        if _device is not None:
+            cls.device = _device
+
+    @classmethod
+    def _set_seed(cls, _seed: Optional[int] = None) -> None:
+        if _seed is not None:
+            cls.seed = _seed
+
+    @classmethod
+    def fix_seed(cls, _device: Optional[torch.device] = None, _seed: Optional[int] = None, _is_use_deterministic_algorithm: bool = True) -> None:
+        if _device is not None:
+            cls._set_device(_device=_device)
+
+        if _seed is not None:
+            cls._set_seed(_seed=_seed)
+
+        random.seed(cls.seed)
+        np.random.seed(cls.seed)
+        torch.manual_seed(cls.seed)
+        cls.generator.manual_seed(cls.seed)
+        if cls.device == torch.device('cuda'):
+            torch.cuda.manual_seed(cls.seed)
+            torch.cuda.manual_seed_all(cls.seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+        if _is_use_deterministic_algorithm is True:
+            torch.use_deterministic_algorithms(_is_use_deterministic_algorithm)
+
+    @classmethod
+    def get_worker_seed(cls, _worker_id) -> None:
+        cls.fix_seed()
+
+    @classmethod
+    def get_generator(cls) -> torch._C.Generator:
+        return cls.generator
 
 
 def var2mat(var_name, var):

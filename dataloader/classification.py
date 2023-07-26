@@ -1,19 +1,20 @@
+import os
 import site
-import cv2, os
+import cv2
 import numpy as np
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 try:
     from vujade import vujade_str as str_
     from vujade import vujade_csv as csv_
-    from vujade.vujade_transformation import image_restoration as trans_
-    from vujade.vujade_debug import printf
+    from vujade.transformation import image_restoration as trans_
+    from vujade.vujade_debug import printd
 except Exception as e:
     site.addsitedir(sitedir=os.getcwd())
     from vujade import vujade_str as str_
     from vujade import vujade_csv as csv_
-    from vujade.vujade_transformation import image_restoration as trans_
-    from vujade.vujade_debug import printf
+    from vujade.transformation import image_restoration as trans_
+    from vujade.vujade_debug import printd
 
 
 # DataLoader
@@ -89,7 +90,7 @@ class ClassificationDataset(Dataset):
             )
 
     def __getitem__(self, idx):
-        name_img, label = self.filenames[idx], self.labels[idx]
+        name_img, label = self.filenames[idx], int(self.labels[idx])
         path_img = os.path.join(self.spath_dataset, name_img)
 
         img = cv2.imread(filename=path_img).astype(np.float32) / 255.0

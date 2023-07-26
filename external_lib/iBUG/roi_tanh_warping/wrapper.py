@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import external_lib.iBUG.roi_tanh_warping.reference_impl as roi_warp_np
 import external_lib.iBUG.roi_tanh_warping.pytorch_impl as roi_warp_pth
-from vujade.vujade_debug import printf
+from vujade.vujade_debug import printd
 
 
 class RoIWarpNumpy(object):

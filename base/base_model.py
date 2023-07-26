@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
-import torchsummary
+import torchinfo
 from abc import abstractmethod
 from vujade import vujade_flops_counter as flops_counter_
-from vujade.vujade_debug import printf
+from vujade.vujade_debug import printd
 
 
 class BaseModel(nn.Module):
@@ -30,8 +30,8 @@ class BaseModel(nn.Module):
         raise NotImplementedError
 
     def _init_weights(self, _nonlinearity: str = 'leaky_relu') -> None:
-        printf('The model name: {}.'.format(self.__class__.__name__), _is_pause=False)
-        printf('The weights of model are initialized.', _is_pause=False)
+        printd('The model name: {}.'.format(self.__class__.__name__), _is_pause=False)
+        printd('The weights of model are initialized.', _is_pause=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
@@ -71,8 +71,8 @@ class BaseModel(nn.Module):
             1) Xavier initialization: sigmoid and Tanh activation function
             2) Kaming He initialization: ReLU activation function
         """
-        printf('The model name: {}.'.format(self.__class__.__name__), _is_pause=False)
-        printf('The weights of model are initialized.', _is_pause=False)
+        printd('The model name: {}.'.format(self.__class__.__name__), _is_pause=False)
+        printd('The weights of model are initialized.', _is_pause=False)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -100,10 +100,10 @@ class BaseModel(nn.Module):
         if isinstance(_input_shape, tuple) is False:
             _input_shape = tuple(_input_shape)
 
-        printf('{} Network summary.'.format(self.__class__.__name__), _is_pause=False)
+        printd('{} Network summary.'.format(self.__class__.__name__), _is_pause=False)
 
         if _is_summary is True:
-            torchsummary.summary(self, input_size=_input_shape, batch_size=_batch_size, device=_device)
+            printd(torchinfo.summary(self.model_cpu, input_size=(_batch_size, *self.input_res), device=_device, verbose=0), _is_pause=False)
 
         tensor_input = torch.randn([1, *_input_shape], dtype=torch.float).to(_device)
         counter = flops_counter_.add_flops_counting_methods(self)
@@ -112,10 +112,10 @@ class BaseModel(nn.Module):
         str_1 = 'Input image resolution: ({}, {}, {}, {})'.format(_batch_size, *_input_shape)
         str_2 = 'Trainable model parameters: {}'.format(self.count_parameters())
         str_3 = 'Flops: {}'.format(flops_counter_.flops_to_string(counter.compute_average_flops_cost()))
-        printf(str_1, _is_pause=False)
-        printf(str_2, _is_pause=False)
-        printf(str_3, _is_pause=False)
-        printf('----------------------------------------------------------------', _is_pause=False)
+        printd(str_1, _is_pause=False)
+        printd(str_2, _is_pause=False)
+        printd(str_3, _is_pause=False)
+        printd('----------------------------------------------------------------', _is_pause=False)
 
         return '{}; {}; {}.'.format(str_1, str_2, str_3)
 

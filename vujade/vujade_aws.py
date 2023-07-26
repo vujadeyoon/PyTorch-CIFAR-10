@@ -11,10 +11,11 @@ Description: A module for the Amazon Web Services (AWS)
 import os
 import sys
 import argparse
+import json
 import boto3
-import botocore.client
 from typing import Set, Optional
 from pathlib import Path
+from botocore.exceptions import ClientError
 try:
     from vujade import vujade_utils as utils_
     from vujade import vujade_path as path_
@@ -22,7 +23,7 @@ try:
     from vujade import vujade_text as text_
     from vujade import vujade_download as download_
     from vujade import vujade_compression as comp_
-    from vujade.vujade_debug import printf
+    from vujade.vujade_debug import printd
 except Exception as e:
     sys.path.append(os.path.join(os.getcwd()))
     from vujade import vujade_utils as utils_
@@ -31,7 +32,7 @@ except Exception as e:
     from vujade import vujade_text as text_
     from vujade import vujade_download as download_
     from vujade import vujade_compression as comp_
-    from vujade.vujade_debug import printf
+    from vujade.vujade_debug import printd
 
 
 def get_aws_mode_base() -> Set[str]:
@@ -47,24 +48,32 @@ def get_aws_mode_stepfunctions() -> Set[str]:
 
 
 class BaseAWS(object):
-    def __init__(self, _spath_aws: str, _access_key: Optional[str] = None, _secret_key: Optional[str] = None):
+    def __init__(self, _spath_aws: str, _access_key: Optional[str] = None, _secret_key: Optional[str] = None, _region: str = 'ap-northeast-2') -> None:
         super(BaseAWS, self).__init__()
         self.path_aws = path_.Path(_spath=_spath_aws)
         if (_access_key is None) or (_secret_key is None):
-            self.access_key, self.secret_key = self._get_aws_access_secret_keys()
+            self.region, self.access_key, self.secret_key = self._get_aws_info()
         else:
-            self.access_key, self.secret_key = _access_key, _secret_key
+            self.region, self.access_key, self.secret_key = _region, _access_key, _secret_key
 
-    def _get_client(self, _name_client: str) -> botocore.client:
+    def _get_resource(self, _name: str):
         try:
-            client = boto3.client(_name_client, aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key)
+            resource = boto3.resource(_name, region_name=self.region, aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key)
         except Exception as e:
-            raise ConnectionError('It is failed to get a {} client with the exception: {}.'.format(_name_client, e))
+            raise ConnectionError('It is failed to get a {} resource with the exception: {}.'.format(_name, e))
+
+        return resource
+
+    def _get_client(self, _name: str):
+        try:
+            client = boto3.client(_name, region_name=self.region, aws_access_key_id=self.access_key, aws_secret_access_key=self.secret_key)
+        except Exception as e:
+            raise ConnectionError('It is failed to get a {} client with the exception: {}.'.format(_name, e))
 
         return client
 
     @staticmethod
-    def install_awscli():
+    def install_awscli() -> None:
         url_awscliv2_zip = 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip'
         path_awscliv2_zip = path_.Path(_spath=os.path.join(os.getcwd(), 'awscliv2.zip'))
         path_awscliv2 = path_.Path(_spath=os.path.join(os.getcwd(), 'aws'))
@@ -79,11 +88,22 @@ class BaseAWS(object):
         path_awscliv2_zip.unlink(_missing_ok=True)
         path_awscliv2.rmtree(_ignore_errors=False, _onerror=None)
 
-    def _get_aws_access_secret_keys(self) -> tuple:
+    def _get_aws_info(self) -> tuple:
+        res = dict()
+        path_config = path_.Path(_spath=os.path.join(self.path_aws.str, 'config'))
         path_credentials = path_.Path(_spath=os.path.join(self.path_aws.str, 'credentials'))
 
+        if path_config.path.is_file() is True:
+            lines = text_.TEXT(_spath_filename=path_config.str, _mode='r').read_lines()
+            for _idx, _line in enumerate(lines):
+                _line = _line.rstrip('\n')
+                if '=' in _line:
+                    key, value = _line.split(' = ')
+                    res[key] = value
+        else:
+            raise FileNotFoundError('The AWS CLI should be installed using the AWS.install_awscli().')
+
         if path_credentials.path.is_file() is True:
-            res = dict()
             lines = text_.TEXT(_spath_filename=path_credentials.str, _mode='r').read_lines()
             for _idx, _line in enumerate(lines):
                 _line = _line.rstrip('\n')
@@ -93,7 +113,7 @@ class BaseAWS(object):
         else:
             raise FileNotFoundError('The AWS CLI should be installed using the AWS.install_awscli().')
 
-        return res['aws_access_key_id'], res['aws_secret_access_key']
+        return res['region'], res['aws_access_key_id'], res['aws_secret_access_key']
 
     @utils_.deprecated
     def enroll_credentials(self, _spath_aws: str, _region: str = 'ap-northeast-2', _output: str = 'json') -> None:
@@ -108,7 +128,7 @@ class BaseAWS(object):
 
 
 class S3(BaseAWS):
-    def __init__(self, _mode: str, _access_key: Optional[str] = None, _secret_key: Optional[str] = None, _spath_aws: str = os.path.join(str(Path.home()), '.aws')):
+    def __init__(self, _mode: str, _access_key: Optional[str] = None, _secret_key: Optional[str] = None, _spath_aws: str = os.path.join(str(Path.home()), '.aws')) -> None:
         super(S3, self).__init__(_spath_aws=_spath_aws, _access_key=_access_key, _secret_key=_secret_key)
         self.mode = _mode
 
@@ -118,7 +138,7 @@ class S3(BaseAWS):
         if _mode in get_aws_mode_base():
             self.client = None
         else:
-            self.client = self._get_client(_name_client='s3')
+            self.client = self._get_client(_name='s3')
 
     def get_object(self, _name_bucket: str, _spath_remote: str) -> bool:
         self._check_spath_remote(_spath_remote=_spath_remote)
@@ -178,7 +198,7 @@ class S3(BaseAWS):
 
 
 class StepFunctions(BaseAWS):
-    def __init__(self, _spath_aws: str, _mode: str, _access_key: Optional[str] = None, _secret_key: Optional[str] = None):
+    def __init__(self, _mode: str, _access_key: Optional[str] = None, _secret_key: Optional[str] = None, _spath_aws: str = os.path.join(str(Path.home()), '.aws')) -> None:
         super(StepFunctions, self).__init__(_spath_aws=_spath_aws, _access_key=_access_key, _secret_key=_secret_key)
         self.mode = _mode
 
@@ -188,7 +208,7 @@ class StepFunctions(BaseAWS):
         if _mode in get_aws_mode_base():
             self.client = None
         else:
-            self.client = self._get_client(_name_client='stepfunctions')
+            self.client = self._get_client(_name='stepfunctions')
 
     def list_state_machines(self, _maxResults: int = 5) -> list:
         response = self.client.list_state_machines(maxResults=_maxResults)
@@ -218,6 +238,316 @@ class StepFunctions(BaseAWS):
         return response['events']
 
 
+class SQS(BaseAWS):
+    def __init__(self, _access_key: Optional[str] = None, _secret_key: Optional[str] = None, _spath_aws: str = os.path.join(str(Path.home()), '.aws')) -> None:
+        super(SQS, self).__init__(_spath_aws=_spath_aws, _access_key=_access_key, _secret_key=_secret_key)
+        self.resource = self._get_resource(_name='sqs')
+        self.client = self._get_client(_name='sqs')
+
+    def create_queue(self, _name: str, _attributes: Optional[dict] = None, _is_silent: bool = True):
+        if _attributes is None:
+            _attributes = {}
+
+        try:
+            queue = self.resource.create_queue(QueueName=_name, Attributes=_attributes)
+            if _is_silent is False:
+                print('A queue, {} is created with the url, {}.'.format(_name, queue.url))
+        except ClientError as error:
+            if _is_silent is False:
+                print('A queue, {} cannot be created.'.format(_name))
+            raise error
+
+        return queue
+
+    def get_queue(self, _name: str, _is_silent: bool = True):
+        try:
+            queue = self.resource.get_queue_by_name(QueueName=_name)
+            if _is_silent is False:
+                print('A queue, {} is gotten with the url, {}.'.format(_name, queue.url))
+        except ClientError as error:
+            if _is_silent is False:
+                print('A queue, {} cannot be gotten.'.format(_name))
+            raise error
+
+        return queue
+
+    def remove_queue(self, _name: str, _is_silent: bool = True) -> None:
+        queue = self.get_queue(_name=_name)
+
+        try:
+            queue.delete()
+            if _is_silent is False:
+                print('A queue is deleted with the url, {}.'.format(queue.url))
+        except ClientError as error:
+            if _is_silent is False:
+                print('A queue cannot be deleted with the url, {}.'.format(queue.url))
+            raise error
+
+    def msg_send(self, _name: str, _msg_body: json, **_kwargs) -> dict:
+        # Usage:
+        #   i)  Standard: res = sqs.msg_send(_name='name.fifo', _msg_body=json.dumps({'message': "test"}))
+        #   ii) FIFO: res = sqs.msg_send(_name='name', _msg_body=json.dumps({'message': "test"}), MessageGroupId='msg_group_id')
+
+        queue = self.get_queue(_name=_name)
+        try:
+            res = self.client.send_message(QueueUrl=queue.url, MessageBody=_msg_body, **_kwargs)
+        except ClientError as e:
+            print('It is failed to send a message.')
+            res = None
+
+        return res
+
+    def msg_receive(self, _name: str, _is_msg_delete: bool = True) -> dict:
+        # Usage: sqs.msg_receive(_name='name', _is_msg_delete=True)
+
+        queue = self.get_queue(_name=_name)
+        try:
+            res = self.client.receive_message(QueueUrl=queue.url)
+            if _is_msg_delete is True:
+                self.client.delete_message(QueueUrl=queue.url, ReceiptHandle=res['Messages'][0]['ReceiptHandle'])
+        except ClientError as e:
+            print('It is failed to receive a message.')
+            res = None
+
+        return res
+
+    def get_attributes(self, _name: str) -> dict:
+        queue = self.get_queue(_name=_name)
+        try:
+            res = self.client.get_queue_attributes(QueueUrl=queue.url, AttributeNames=['All'])
+        except ClientError as e:
+            print('It is failed to get attributes of the queue.')
+            res = None
+
+        return res
+
+    def get_num_msg(self, _name: str) -> int:
+        queue_attr = self.get_attributes(_name=_name)
+        return int(queue_attr['Attributes']['ApproximateNumberOfMessages'])
+
+
+class DynamoDB(BaseAWS):
+    def __init__(self, _access_key: Optional[str] = None, _secret_key: Optional[str] = None, _spath_aws: str = os.path.join(str(Path.home()), '.aws')) -> None:
+        """
+        Usage:
+            param_name_table = 'DynamoDB-Test'
+            param_item = {
+                'request_id': str(uuid.uuid4()),
+                'name_user': 'usrname',
+                'key_1': 1,
+                'key_2': 2,
+                'key_3': 'value_3',
+                'key_4': 'value_4'
+            }
+            param_key = {'request_id': 'a455b494-7fa3-46ce-bc9b-aa562a5db85d', 'name_user': 'usrname'}
+            param_attr_val_1 = 'example_1: 1111-22-33'
+            param_attr_val_2 = 'example_2: 11:22:33'
+            param_attr_name_1 = 'to_be_deleted'
+            param_update_expression = f'SET attr_name_1=:{param_attr_val_1}, attr_name_2=:{param_attr_val_2} REMOVE {param_attr_name_1}'
+
+            dynamo_db = DynamoDB(_access_key=access_key, _secret_key=secret_key)
+            dynamo_db.list_tables()
+            dynamo_db.get_table(_name_table=param_name_table)
+            dynamo_db.scan(_name_table=param_name_table)
+            dynamo_db.create(_name_table=param_name_table, _item=param_item)
+            dynamo_db.read(_name_table=param_name_table, _key=param_key)
+            dynamo_db.update(_name_table=param_name_table, _key=param_key, _update_expression=param_update_expression)
+            dynamo_db.delete(_name_table=param_name_table, _key=param_key)
+        """
+        super(DynamoDB, self).__init__(_spath_aws=_spath_aws, _access_key=_access_key, _secret_key=_secret_key)
+        self.resource = self._get_resource(_name='dynamodb')
+        self.client = self._get_client(_name='dynamodb')
+        self.update_expression_action_value_supported = {'SET', 'REMOVE'}
+        self.update_expression_action_value_not_supported = {'ADD', 'DELETE'}
+        self.update_expression_action_value = set.union(self.update_expression_action_value_supported, self.update_expression_action_value_not_supported)
+
+    def list_tables(self) -> dict:
+        return self.client.list_tables()
+
+    def get_table(self, _name_table: str):
+        return self.resource.Table(_name_table)
+
+    def scan(self, _name_table: str) -> dict:
+        table = self.get_table(_name_table=_name_table)
+        return table.scan()
+
+    def query(self, _name_table: str, _key_condition_expression) -> list:
+        table = self.get_table(_name_table=_name_table)
+        response = table.query(KeyConditionExpression=_key_condition_expression)
+
+        return response['Items']
+
+    def create(self, _name_table: str, _item: dict) -> dict:
+        table = self.get_table(_name_table=_name_table)
+        return table.put_item(Item=_item)
+
+    def read(self, _name_table: str, _key: dict):
+        table = self.get_table(_name_table=_name_table)
+
+        try:
+            response = table.get_item(Key=_key)['Item']
+        except Exception as e:
+            print('It is failed to read the item in the DynamoDB; Exception: {}.'.format(e))
+            response = None
+
+        return response
+
+    def update(self, _name_table: str, _key: dict, _update_expression: str, _return_values: str = 'UPDATED_NEW'):
+        if self._is_valid_update(_update_expression=_update_expression) is True:
+            table = self.get_table(_name_table=_name_table)
+            update_expression_new, expression_attribute_names_new, expression_attribute_values_new = self._get_params(_update_expression=_update_expression)
+
+            kwargns = dict()
+            if expression_attribute_names_new is not None:
+                kwargns['ExpressionAttributeNames'] = expression_attribute_names_new
+            if expression_attribute_values_new is not None:
+                kwargns['ExpressionAttributeValues'] = expression_attribute_values_new
+
+            try:
+                response = table.update_item(
+                    Key=_key,
+                    UpdateExpression=update_expression_new,
+                    ReturnValues=_return_values,
+                    **kwargns
+                )
+            except Exception as e:
+                print('It is failed to update the item in the DynamoDB; Exception: {}.'.format(e))
+                response = None
+
+        else:
+            print('The action values in _update_expression has not been supported yet.')
+            response = None
+
+        return response
+
+    def delete(self, _name_table: str, _key: dict):
+        table = self.get_table(_name_table=_name_table)
+
+        try:
+            response = table.delete_item(Key=_key)
+        except Exception as e:
+            print('It is failed to delete the item in the DynamoDB; Exception: {}.'.format(e))
+            response = None
+
+        return response
+
+    def _is_valid_update(self, _update_expression: str) -> bool:
+        res = True
+        for _idx, _action_val in enumerate(self.update_expression_action_value_not_supported):
+            if _action_val in _update_expression:
+                res = False
+                break
+
+        return res
+
+    def _get_params(self, _update_expression: str) -> tuple:
+        update_expression_new = ''
+        expression_attribute_names_new = dict()
+        expression_attribute_values_new = dict()
+
+        splitted_update_expression = self._split_update_expression(_update_expression=_update_expression)
+
+        for _idx, _element_splitted_update_expression in enumerate(splitted_update_expression):
+            for _idy, _action_val in enumerate(self.update_expression_action_value):
+                if _action_val in _element_splitted_update_expression:
+                    update_expression_new += ' {}'.format(_action_val)
+                    attr_name_val = _element_splitted_update_expression.replace('{} '.format(_action_val), '').split(', ')
+                    for _idz, _attr_name_val in enumerate(attr_name_val):
+                        if _action_val == 'SET':
+                            attr_name, attr_val = _attr_name_val.split('=:')
+                            update_expression_new += ' #name_{}_{}=:val_{}_{},'.format(_idy, _idz, _idy, _idz)
+                            expression_attribute_names_new['#name_{}_{}'.format(_idy, _idz)] = attr_name
+                            expression_attribute_values_new[':val_{}_{}'.format(_idy, _idz)] = attr_val
+                        elif _action_val == 'REMOVE':
+                            attr_name = _attr_name_val
+                            update_expression_new += ' #name_{}_{},'.format(_idy, _idz)
+                            expression_attribute_names_new['#name_{}_{}'.format(_idy, _idz)] = attr_name
+                        elif _action_val == 'ADD':
+                            raise NotImplementedError
+                        elif _action_val == 'DELETE':
+                            raise NotImplementedError
+                    break
+
+        update_expression_new = update_expression_new.lstrip(' ').rstrip(',')
+
+        for _idx, _action_val in enumerate(self.update_expression_action_value):
+            if _action_val in update_expression_new:
+                update_expression_new= update_expression_new.replace(', {}'.format(_action_val), ' {}'.format(_action_val))
+
+        return update_expression_new, expression_attribute_names_new, expression_attribute_values_new
+
+    def _split_update_expression(self, _update_expression: str) -> list:
+        res = list()
+        idx_update_expression_action_value = list()
+
+        for _idx, _action_val in enumerate(self.update_expression_action_value):
+            idx_find = _update_expression.find(_action_val)
+            if 0 <= idx_find:
+                idx_update_expression_action_value.append(idx_find)
+
+        idx_update_expression_action_value.sort()
+        idx_update_expression_action_value.append(len(_update_expression))
+
+        for _idx in range(len(idx_update_expression_action_value) - 1):
+            res.append(_update_expression[idx_update_expression_action_value[_idx]:idx_update_expression_action_value[_idx + 1]].rstrip(' '))
+
+        return res
+
+
+class EC2(BaseAWS):
+    def __init__(self, _access_key: Optional[str] = None, _secret_key: Optional[str] = None, _spath_aws: str = os.path.join(str(Path.home()), '.aws'), _ljust: int = 25) -> None:
+        super(EC2, self).__init__(_spath_aws=_spath_aws, _access_key=_access_key, _secret_key=_secret_key)
+        self.ljust = _ljust
+        self.resource = self._get_resource(_name='ec2')
+        self.client = self._get_client(_name='ec2')
+        self.instances = self._get_instances()
+
+    def list(self) -> None:
+        print("{} {} {} {} {} {} {} {}".format('No.'.ljust(5), 'Tag Name'.ljust(self.ljust), 'Instance ID'.ljust(self.ljust), 'Instance type'.ljust(self.ljust), 'Public IPv4 address'.ljust(self.ljust), 'Availability Zone'.ljust(self.ljust), 'Key name'.ljust(self.ljust), 'Instance state'))
+        for _idx, _instance in enumerate(self.instances):
+            print(f"{str(_idx).ljust(5)} "
+                  f"{_instance['Tags'][:(self.ljust - 2)].ljust(self.ljust)} "
+                  f"{_instance['InstanceId'][:(self.ljust - 2)].ljust(self.ljust)} "
+                  f"{_instance['InstanceType'].ljust(self.ljust)} "
+                  f"{_instance['PublicIpAddress'].ljust(self.ljust)} "
+                  f"{_instance['AvailabilityZone'].ljust(self.ljust)} "
+                  f"{_instance['KeyName'].ljust(self.ljust)} "
+                  f"{_instance['State']}")
+
+    def _get_instances(self) -> list:
+        res = list()
+        instances_reservation = self.client.describe_instances()['Reservations']
+
+        for _idx, _instances_reservation in enumerate(instances_reservation):
+            info_instance = _instances_reservation['Instances'][0]
+            res.append({
+                'ImageId': self._get_information(info_instance, _key_1='ImageId', _key_2=None),
+                'InstanceId': self._get_information(info_instance, _key_1='InstanceId', _key_2=None),
+                'InstanceType': self._get_information(info_instance, _key_1='InstanceType', _key_2=None),
+                'KeyName': self._get_information(info_instance, _key_1='KeyName', _key_2=None),
+                'AvailabilityZone': self._get_information(info_instance, _key_1='Placement', _key_2='AvailabilityZone'),
+                'PublicIpAddress': self._get_information(info_instance, _key_1='PublicIpAddress', _key_2=None),
+                'State': self._get_information(info_instance, _key_1='State', _key_2='Name'),
+                'Tags': self._get_information(info_instance, _key_1='Tags', _key_2='Value')
+            })
+
+        return res
+
+    def _get_information(self, info_instance: dict, _key_1: str, _key_2: Optional[str] = None) -> str:
+        try:
+            if _key_2 is None:
+                res = info_instance[_key_1]
+            else:
+                if _key_1 == 'Tags':
+                    res = info_instance[_key_1][0][_key_2]
+                else:
+                    res = info_instance[_key_1][_key_2]
+        except Exception as e:
+            res = 'None'
+
+        return res
+
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='AWS S3 Boto3')
     parser.add_argument('--mode', '-M', type=str, default='upload', help='Option: awscli; enroll; upload; download; delete.')
@@ -233,7 +563,7 @@ if __name__=='__main__':
     args = parser.parse_args()
 
     if args.mode in get_aws_mode_s3():
-        printf('args.mode: {}.'.format(args.mode), _is_pause=False)
+        printd('args.mode: {}.'.format(args.mode), _is_pause=False)
         aws_s3 = S3(_mode=args.mode, _access_key=args.access_key, _secret_key=args.secret_key, _spath_aws=args.path_aws)
     else:
         raise NotImplementedError('The AWS S3 mode: {} is not supported yet.'.format(args.mode))

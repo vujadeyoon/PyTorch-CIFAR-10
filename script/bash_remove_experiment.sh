@@ -1,9 +1,6 @@
 #!/bin/bash
 #
 #
-# Command: bash ./bash/bash_remove_experiment.sh CelebAMask-HQ "*"
-#
-#
 name_dataset=$1
 name_experiment=$2
 #

@@ -12,7 +12,6 @@ class ResNet_18_1(BaseModel):
     def forward(self, x):
         x = self.model(x)
         res = F.log_softmax(x, dim=1)
-
         return res
 
 
@@ -23,5 +22,4 @@ class ResNet_18_2(BaseModel):
 
     def forward(self, x):
         res = self.model(x)
-
         return res

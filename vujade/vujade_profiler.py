@@ -15,13 +15,16 @@ import functools
 import time
 import datetime
 import statistics
+import torch
 import numpy as np
 from vujade import vujade_resource as rsc_
 from vujade import vujade_utils as utils_
+from vujade.vujade_debug import encode_color
 
 
 class DEBUG(object):
     def __init__(self):
+        super(DEBUG, self).__init__()
         self.fileName = None
         self.lineNumber = None
         self.reTraceStack = re.compile('File \"(.+?)\", line (\d+?), .+')
@@ -73,7 +76,7 @@ def measure_time(_iter: int = 1, _warmup: int = 0):
             info_trace_1 = '[{}: {}]:'.format(debug_info.fileName, debug_info.lineNumber)
             info_trace_2 = 'The function, {} is called.'.format(_func.__name__)
             info_trace_3 = 'Total time for {} times: {:.2e} sec. Avg. time: {:.2e} sec.'.format(_iter, time_cumsum, time_cumsum / _iter)
-            print('{} {} {}'.format(info_trace_1, info_trace_2, info_trace_3))
+            print(encode_color('{} {} {}'.format(info_trace_1, info_trace_2, info_trace_3)))
             return result
         return _wrapper
     return _measure_time
@@ -81,6 +84,7 @@ def measure_time(_iter: int = 1, _warmup: int = 0):
 
 class IntegratedProfiler(object):
     def __init__(self, _pid: int = utils_.getpid(), _gpu_id: int = 0) -> None:
+        super(IntegratedProfiler, self).__init__()
         self.prof_time = TimeProfiler()
         self.prof_mem_main = MainMemoryProfiler(_pid=_pid)
         self.prof_mem_gpu = GPUMemoryProfiler(_pid=_pid, _gpu_id=_gpu_id)
@@ -173,7 +177,7 @@ class GPUMemoryProfiler(rsc_.GPUMemory, DEBUG):
 
 class TimeProfiler(DEBUG):
     def __init__(self) -> None:
-        DEBUG.__init__(self)
+        super(TimeProfiler, self).__init__()
         self.cnt_call = 0
         self.time_start = 0.0
         self.time_prev = 0.0
@@ -218,7 +222,7 @@ class TimeProfiler(DEBUG):
 
 class AverageMeterMainMemory(rsc_.MainMemory):
     def __init__(self, _pid=utils_.getpid(), _warmup=0):
-        rsc_.MainMemory.__init__(self, _pid=_pid)
+        super(AverageMeterMainMemory, self).__init__(_pid=_pid)
         self.warmup = _warmup
         self.cnt_call = 0
         self.mem_list = []
@@ -248,7 +252,7 @@ class AverageMeterMainMemory(rsc_.MainMemory):
 
 class AverageMeterGPUMemory(rsc_.GPUMemory):
     def __init__(self, _pid=utils_.getpid(), _gpu_id=0, _warmup=0):
-        rsc_.GPUMemory.__init__(self, _pid=_pid, _gpu_id=_gpu_id)
+        super(AverageMeterGPUMemory, self).__init__(_pid=_pid, _gpu_id=_gpu_id)
         self.warmup = _warmup
         self.cnt_call = 0
         self.mem_list = []
@@ -283,6 +287,7 @@ class AverageMeterTime(object):
         """
         :param int _warmup: A number of times for warming up.
         """
+        super(AverageMeterTime, self).__init__()
         self.warmup = _warmup
         self.cnt_call = 0
         self.time_len = 0
@@ -308,8 +313,49 @@ class AverageMeterTime(object):
         self.fps_avg = 1 / (self.time_avg + self.eps_val)
 
 
+class AverageMeterTimePyTorchGPU(object):
+    """
+    This class is intended to profile the processing time
+    """
+    def __init__(self, _warmup: int = 0) -> None:
+        """
+        :param int _warmup: A number of times for warming up.
+        """
+        super(AverageMeterTimePyTorchGPU, self).__init__()
+        self.warmup = _warmup
+        self.cnt_call = 0
+        self.time_len = 0
+        self.time_sum = 0.0
+        self.time_avg = 0.0
+        self.fps_avg = 0.0
+        self.eps_val = 1e-9
+        self.starter = torch.cuda.Event(enable_timing=True)
+        self.ender = torch.cuda.Event(enable_timing=True)
+
+    def tic(self) -> None:
+        self.starter.record()
+
+    def toc(self) -> None:
+        self.ender.record()
+        self._synchronize_gpu()
+        self.cnt_call += 1
+
+        if self.warmup < self.cnt_call:
+            self._update()
+
+    def _update(self) -> None:
+        self.time_len = (self.cnt_call - self.warmup)
+        self.time_sum += self.starter.elapsed_time(self.ender) / 1e3
+        self.time_avg = (self.time_sum / self.time_len)
+        self.fps_avg = 1 / (self.time_avg + self.eps_val)
+
+    def _synchronize_gpu(self) -> None:
+        torch.cuda.synchronize()
+
+
 class AverageMeterValue(object):
     def __init__(self, **kwargs):
+        super(AverageMeterValue, self).__init__()
         self.cnt_call = 0
         self.keys = list(kwargs.keys())
         self.len = len(self.keys)

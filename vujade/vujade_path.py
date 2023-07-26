@@ -18,6 +18,7 @@ from typing import Union, List, Tuple, Optional
 
 class Path(object):
     def __init__(self, _spath: str):
+        super(Path, self).__init__()
         self.__spath = _spath
         self.name = self.path.stem
         self.ext = self.path.suffix
@@ -54,17 +55,15 @@ class Path(object):
             raise OSError('The file move is failed.: {}'.format(e))
 
     def copy(self, _spath_dst: str) -> None:
+        path_dst = Path(_spath_dst)
+        path_dst.parent.path.mkdir(mode=0o755, parents=True, exist_ok=True)
         try:
-            shutil.copy2(src=self.str, dst=_spath_dst)
+            shutil.copy2(src=self.str, dst=path_dst.str)
         except Exception as e:
             raise OSError('The file copy is failed.: {}'.format(e))
 
     def unlink(self, _missing_ok: bool = True) -> None:
-        if self.path.is_file() is True:
-            self.path.unlink()
-        else:
-            if _missing_ok is False:
-                raise FileNotFoundError('The file, {} is not existed.'.format(self.str))
+        self.path.unlink(missing_ok=_missing_ok)
 
     def rmdir(self) -> None:
         self.path.rmdir()
@@ -80,6 +79,9 @@ class Path(object):
         os.chdir(self.str)
 
     def count_number_files(self, _pattern: str = '*') -> int:
+        if self.path.is_file() is True:
+            raise ValueError('The given path should be a directory path.')
+
         return len(list(self.path.rglob('*')))
 
 

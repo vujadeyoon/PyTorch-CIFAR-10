@@ -5,7 +5,7 @@ from numpy import inf
 from logger import TensorboardWriter
 from model import model as module_arch
 from vujade import vujade_slack as slack_
-from vujade.vujade_debug import printf
+from vujade.vujade_debug import printd
 
 
 class BaseTrainer:
@@ -28,11 +28,13 @@ class BaseTrainer:
         self.monitor = cfg_trainer.get('monitor', 'off')
         self.name_dataset = self.config['name']
         self.run_id = self.config.run_id
-        self.slack = slack_.Slack(_token_usr=self.config['slack']['token_usr'],
-                                  _token_bot=self.config['slack']['token_bot'],
-                                  _channel=self.config['slack']['channel'],
-                                  _is_time=self.config['slack']['is_time'],
-                                  _is_debug=self.config['slack']['is_debug'])
+        self.slack = slack_.Slack(
+            _token_user=self.config['slack']['token_usr'],
+            _token_bot=self.config['slack']['token_bot'],
+            _channel=self.config['slack']['channel'],
+            _is_time=self.config['slack']['is_time'],
+            _is_debug=self.config['slack']['is_debug']
+        )
 
         # configuration to monitor model performance and save best
         if self.monitor == 'off':
@@ -145,8 +147,8 @@ class BaseTrainer:
         torch.save(state, filename)
         self.logger.info("Saving checkpoint: {} ...".format(filename))
         if save_best:
-            best_path = os.path.join(self.checkpoint_dir, 'ckpt-best.pth')
-            torch.save(state, best_path)
+            spath_ckpt_best = os.path.join(self.checkpoint_dir, 'ckpt-best.pth')
+            torch.save(state, spath_ckpt_best)
             self.logger.info("Saving current best: ckpt-best.pth ...")
 
     def _resume_checkpoint(self, resume_path):

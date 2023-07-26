@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class CrossEntropy(nn.Module):
-    def __init__(self, _class_ignore: int = 255, _reduction: str = 'mean') -> None:
+    def __init__(self, _class_ignore: int = -1, _reduction: str = 'mean') -> None:
         super(CrossEntropy, self).__init__()
         self.class_ignore = _class_ignore
         self.criteria = nn.CrossEntropyLoss(ignore_index=self.class_ignore, reduction=_reduction)

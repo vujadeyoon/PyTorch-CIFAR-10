@@ -38,6 +38,7 @@ def encode_vid2vid(_spath_video_src: str, _spath_video_dst: str) -> bool:
 
 class VideoReaderFFmpeg(object):
     def __init__(self, _spath_video: str, _channel: int = 3, _pix_fmt: str = 'bgr24'):
+        super(VideoReaderFFmpeg, self).__init__()
         self.spath_video = _spath_video
         video_info = self._get_info()
         self.height = video_info['height']
@@ -90,13 +91,14 @@ class VideoReaderFFmpeg(object):
 
 
 class VideoWriterFFmpeg(object):
-    def __init__(self, _spath_video: str, _resolution: tuple = (1080, 1920), _fps: float = 30.0, _qp_val: int = 0, _pix_fmt: str = 'bgr24', _codec: str = 'libx264'):
+    def __init__(self, _spath_video: str, _size: tuple = (1080, 1920), _fps: float = 30.0, _qp_val: int = 0, _pix_fmt: str = 'bgr24', _codec: str = 'libx264'):
+        super(VideoWriterFFmpeg, self).__init__()
         if _spath_video is None:
             raise ValueError('The parameter, _spath_video, should be assigned.')
 
         self.spath_video = _spath_video
-        self.height = int(_resolution[0])
-        self.width = int(_resolution[1])
+        self.height = int(_size[0])
+        self.width = int(_size[1])
         self.fps = float(_fps)
         self.qp_val = _qp_val
         self.pix_fmt = _pix_fmt
@@ -122,6 +124,7 @@ class VideoWriterFFmpeg(object):
 
 class VideoReaderCV(object):
     def __init__(self, _spath_video: str, _sec_start: int = None, _sec_end: int = None) -> None:
+        super(VideoReaderCV, self).__init__()
         if _spath_video is None:
             raise ValueError('The parameter, _spath_video, should be assigned.')
 
@@ -143,6 +146,7 @@ class VideoReaderCV(object):
         self.num_frames_ori = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.length_ori = int(self.num_frames_ori / self.fps)
         self.orientation = self._get_orientation()
+        self.frame_types = self._get_frame_types()
 
         if (_sec_end is not None) and (self.length_ori <= _sec_end):
             _sec_end = None
@@ -241,6 +245,18 @@ class VideoReaderCV(object):
 
         return orientation
 
+    def _get_frame_types(self) -> dict:
+        command = 'ffprobe -v error -show_entries frame=pict_type -of default=noprint_wrappers=1 {}'.format(self.spath_video)
+        frame_types = utils_.SystemCommand.check_output(_command=command, _split=True, _shell=False, _decode=True).replace('pict_type=', '').split()
+
+        res = {
+            'I': list_.find_indices(_list=frame_types, _mached_element='I'),
+            'P': list_.find_indices(_list=frame_types, _mached_element='P'),
+            'B': list_.find_indices(_list=frame_types, _mached_element='B')
+        }
+
+        return res
+
     def _get_idx_frame(self) -> int:
         return int(self.cap.get(cv2.CAP_PROP_POS_FRAMES))
 
@@ -306,18 +322,6 @@ class VideoReaderCV(object):
 
         return frames
 
-    def get_frame_types(self) -> dict:
-        command = 'ffprobe -v error -show_entries frame=pict_type -of default=noprint_wrappers=1 {}'.format(self.spath_video)
-        frame_types = utils_.SystemCommand.check_output(_command=command, _split=True, _shell=False, _decode=True).replace('pict_type=', '').split()
-
-        res = {
-            'I': list_.find_indices(_list=frame_types, _mached_element='I'),
-            'P': list_.find_indices(_list=frame_types, _mached_element='P'),
-            'B': list_.find_indices(_list=frame_types, _mached_element='B')
-        }
-
-        return res
-
     def get_timestamp(self) -> list:
         while (self.is_eof is False):
             self.imread(_num_batch_frames=1, _trans=None)
@@ -329,13 +333,14 @@ class VideoReaderCV(object):
 
 
 class VideoWriterCV(object):
-    def __init__(self, _spath_video: str, _resolution: tuple = (1920, 1080), _fps: float = 30.0, _fourcc: int = cv2.VideoWriter_fourcc(*'MJPG')):
+    def __init__(self, _spath_video: str, _size: tuple = (1080, 1920), _fps: float = 30.0, _fourcc: int = cv2.VideoWriter_fourcc(*'MJPG')):
+        super(VideoWriterCV, self).__init__()
         if _spath_video is None:
             raise ValueError('The variable, _spath_video, should be assigned.')
 
         self.spath_video = _spath_video
-        self.width = int(_resolution[0])
-        self.height = int(_resolution[1])
+        self.height = int(_size[0])
+        self.width = int(_size[1])
         self.fps = float(_fps)
         self.fourcc = _fourcc
         self.wri = self._open()
@@ -359,6 +364,7 @@ class SceneChangeDetectorFFmpeg(object):
         ii) grep showinfo ffout.log | grep pts_time:[0-9.]* -o | grep [0-9.]* -o > ffout_scene_change_detection.log
     """
     def __init__(self, _threshold: float = 0.4):
+        super(SceneChangeDetectorFFmpeg, self).__init__()
         self.threshold = _threshold
         self.offset = 9
 
@@ -400,6 +406,7 @@ class SceneChangeDetectorFFmpegInteractiveProcessing(object):
         :param float _threshold: A thershold value to determine wheter the scene change occurs
         :param bool _is_cython: A boolean variable to decide whether to use cython
         """
+        super(SceneChangeDetectorFFmpegInteractiveProcessing, self).__init__()
         if _dsize is None:
             raise ValueError('The argument should be tuple, not None.')
 
@@ -533,6 +540,7 @@ class SceneChangeDetectorFFmpegBatchProcessing(object):
         :param bool _unit_computation: A computation unit
         :param bool _is_cython: A boolean variable to decide whether to use cython
         """
+        super(SceneChangeDetectorFFmpegBatchProcessing, self).__init__()
         if _dsize is None:
             raise ValueError('The argument should be tuple, not None.')
 

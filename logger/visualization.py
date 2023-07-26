@@ -1,6 +1,6 @@
 import importlib
 from datetime import datetime
-from vujade.vujade_debug import printf
+from vujade.vujade_debug import printd
 
 
 class TensorboardWriter():

@@ -5,18 +5,19 @@ from functools import reduce, partial
 from operator import getitem
 from datetime import datetime
 from logger import setup_logging
-from utils import read_yaml, write_yaml
+from utils import write_yaml
+from vujade import vujade_omegaconf as omegaconf_
+from vujade.vujade_debug import printd
 
 
 class ConfigParser:
-    def __init__(self, config, resume=None, modification=None, run_id=None):
+    def __init__(self, config, resume=None, modification=None) -> None:
         """
         class to parse configuration json file. Handles hyperparameters for training, initializations of modules, checkpoint saving
         and logging module.
         :param config: Dict containing configurations, hyperparameters for training. contents of `config.yaml` file for example.
         :param resume: String, path to the checkpoint being loaded.
         :param modification: Dict keychain:value, specifying position values to be replaced from config dict.
-        :param run_id: Unique Identifier for training processes. Used to save checkpoints and training log. Timestamp is being used as default
         """
         # load config file and apply modification
         self._config = _update_config(config, modification)
@@ -27,15 +28,12 @@ class ConfigParser:
         log_dir = Path(self.config['visualization']['log_dir'])
 
         exper_name = self.config['name']
-        if run_id is None: # use timestamp as default run-id
-            self._run_id = datetime.now().strftime(r'%y%m%d_%H%M%S')
-        else:
-            self._run_id = run_id
+        self._run_id = self.config['run_id']
         self._save_dir = save_dir / exper_name / self._run_id
         self._log_dir = log_dir / exper_name / self._run_id
 
         # make directory for saving checkpoints and log.
-        exist_ok = self._run_id == 'exist_ok'
+        exist_ok = 'exist_ok' in self._run_id
         self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
         self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
 
@@ -62,8 +60,6 @@ class ConfigParser:
         if not isinstance(args, tuple):
             args = args.parse_args()
 
-        if args.device is not None:
-            os.environ["CUDA_VISIBLE_DEVICES"] = args.device
         if args.resume is not None:
             resume = Path(args.resume)
             cfg_fname = resume.parent / 'config.yaml'
@@ -73,15 +69,25 @@ class ConfigParser:
             resume = None
             cfg_fname = Path(args.config)
 
-        config = read_yaml(cfg_fname)
+        _config = omegaconf_.OmegaConf.load(_spath_filename=str(cfg_fname), _is_interpolation=False)
+
+        # Update _config from args
+        if ('run_id' in args) and (args.run_id is not None):
+            _config['run_id'] = args.run_id
+
+        config = dict()
+        omegaconf_.OmegaConf.cfg2dict(_res=config, _cfg=_config, _key_recursived=None)
+
         if args.config and resume:
             # update new config for fine-tuning
-            config.update(read_yaml(args.config))
+            config.update(omegaconf_.OmegaConf.load(_spath_filename=args.config, _is_interpolation=True))
 
         # parse custom cli options into dictionary
         modification = {opt.target : getattr(args, _get_opt_name(opt.flags)) for opt in options}
-        res = cls(config, resume, modification, args.run_id)
 
+        res = cls(config, resume, modification)
+
+        # Update trainer.is_amp to False
         if res['trainer']['is_cuda'] is False:
             res['trainer']['is_amp'] = False
 
