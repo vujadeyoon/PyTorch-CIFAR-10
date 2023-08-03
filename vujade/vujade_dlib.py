@@ -40,7 +40,7 @@ class DLIB(object):
     def load_image(self, _spath_image: str, _is_bgr2rgb: bool = True) -> np.ndarray:
         res = cv2.imread(_spath_image, cv2.IMREAD_COLOR)
         if _is_bgr2rgb is True:
-            res = cv2.cvtColor(res, cv2.COLOR_RGB2BGR)
+            res = cv2.cvtColor(res, cv2.COLOR_BGR2RGB)
         return res
 
     def get_detected_faces(self, _ndarr_img: np.ndarray):

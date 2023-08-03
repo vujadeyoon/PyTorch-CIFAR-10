@@ -1,0 +1,164 @@
+arch:
+  args:
+    num_class: 10
+  type: ResNet_18_2
+backup:
+  cmd: tar -czvf ./saved/model/CIFAR_10/exist_ok/backup.tar.gz --exclude ./.git --exclude
+    ./saved .
+  is_backup: true
+hparam:
+  key_metric:
+  - val_loss
+  - val_Accuracy
+  - val_AccuarcyTopK
+  run_name: HyperParams_Result
+loss:
+  args:
+    _class_ignore: -1
+    _reduction: mean
+  type: CrossEntropy
+lr_scheduler:
+  args:
+    T_max: 200
+  type: CosineAnnealingLR
+  warmup_alogrithm: Multiplicative
+  warmup_epoch: -1
+  warmup_lr: 1.0e-05
+metric:
+  metric_1:
+    type: Accuracy
+  metric_2:
+    args:
+      _k: 3
+    type: AccuarcyTopK
+name: CIFAR_10
+optimizer:
+  args:
+    lr: 0.1
+    momentum: 0.9
+    weight_decay: 0.0005
+  type: SGD
+run_id: exist_ok
+slack:
+  channel: research
+  is_debug: false
+  is_slack: false
+  is_time: true
+  token_bot: SECRET_SLACK_TOKEN_BOT
+  token_usr: SECRET_SLACK_TOKEN_USR
+summary:
+  computational_cost:
+    as_strings: true
+    input_resolution:
+    - 3
+    - 32
+    - 32
+    is_print: true
+    precision: 2
+    print_per_layer_stat: false
+    units_flops: GFlop
+    units_macs: GMac
+    units_params: None
+    verbose: false
+  model:
+    is_print: false
+test_loader:
+  args:
+    batch_size: 100
+    is_train: false
+    mean:
+    - 0.4914
+    - 0.4822
+    - 0.4465
+    n_workers: 4
+    padding: 0
+    pin_memory: true
+    prob_flip: 0.0
+    shuffle: false
+    size:
+    - 3
+    - 32
+    - 32
+    spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_test.csv
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_test
+    std:
+    - 0.2023
+    - 0.1994
+    - 0.201
+  type: ClassificationDataLoader
+train_loader:
+  args:
+    batch_size: 128
+    is_train: true
+    mean:
+    - 0.4914
+    - 0.4822
+    - 0.4465
+    n_workers: 4
+    padding: 4
+    pin_memory: true
+    prob_flip: 0.5
+    shuffle: true
+    size:
+    - 3
+    - 32
+    - 32
+    spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_train.csv
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_train
+    std:
+    - 0.2023
+    - 0.1994
+    - 0.201
+  type: ClassificationDataLoader
+trainer:
+  early_stop: -1
+  epochs: 200
+  is_amp: true
+  is_cuda: true
+  is_use_deterministic_algorithm: false
+  log_step: 1
+  model_dir: ./saved/model
+  monitor: min val_loss
+  save_period: 1
+  seed: 1234
+  verbosity: 1
+valid_loader:
+  args:
+    batch_size: 100
+    is_train: false
+    mean:
+    - 0.4914
+    - 0.4822
+    - 0.4465
+    n_workers: 4
+    padding: 0
+    pin_memory: true
+    prob_flip: 0.0
+    shuffle: false
+    size:
+    - 3
+    - 32
+    - 32
+    spath_csv: /DATA/Dataset/CIFAR_10/CIFAR_10_test.csv
+    spath_dataset: /DATA/Dataset/CIFAR_10/CIFAR_10_test
+    std:
+    - 0.2023
+    - 0.1994
+    - 0.201
+  type: ClassificationDataLoader
+visualization:
+  dataformats: CHW
+  idx_picture: 0
+  log_dir: ./saved/log
+  ncol: 2
+  normalize:
+    mean:
+    - 0.4914
+    - 0.4822
+    - 0.4465
+    std:
+    - 0.2023
+    - 0.1994
+    - 0.201
+  nrow: 1
+  tensorboard: true
