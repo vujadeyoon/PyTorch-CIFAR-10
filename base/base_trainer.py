@@ -3,7 +3,7 @@ import torch
 from abc import abstractmethod
 from numpy import inf
 from logger import TensorboardWriter
-from model import model as module_arch
+from model import resnet18 as module_arch
 from vujade import vujade_slack as slack_
 from vujade.vujade_debug import printd
 

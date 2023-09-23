@@ -1,5 +1,5 @@
 import argparse
-from model.model import ResNet_18_2
+from model.resnet18 import ResNet_18_2
 from vujade import vujade_torch as torch_
 from vujade.vujade_debug import printd
 
@@ -11,8 +11,6 @@ def get_args() -> argparse.Namespace:
 
     return args
 
-# (PyTorch) sjyoon1671@MATE:/DATA/sjyoon1671/Research/PyTorch-FaceParsing$ python3 main_analysis.py --mode dev
-# Downloading: "https://github.com/lukemelas/EfficientNet-PyTorch/releases/download/1.0/efficientnet-b7-dcc49843.pth" to /home/sjyoon1671/.cache/torch/hub/checkpoints/efficientnet-b7-dcc49843.pth
 
 if __name__=='__main__':
     args = get_args()

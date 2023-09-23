@@ -28,7 +28,7 @@ def _main(_args) -> None:
         model = torch.load(path_pth.str).to(device).eval()
 
     ndarr_img_ori = imgcv_.imread(_filename=path_img.str).astype(np.float32)
-    tensor_input = trans_.ndarr2tensor(_ndarr=trans_.Standardize.forward(_ndarr=ndarr_img_ori, _mean=_args.mean, _std=_args.std).astype(np.float32)).to(device)
+    tensor_input = trans_.ndarr2tensor(_ndarr=trans_.array2batch(trans_.Standardize.forward(_ndarr=ndarr_img_ori, _mean=_args.mean, _std=_args.std), _axis_expanded=0, _axes_swapped=(0, 3, 1, 2)).astype(np.float32)).to(device)
 
     with torch.no_grad():
         tensor_output = model(tensor_input)
