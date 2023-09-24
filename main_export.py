@@ -2,7 +2,7 @@ import os
 import argparse
 import collections
 import torch
-from model import resnet18 as module_arch
+from model import mobileone as module_arch
 from config.parse_config import ConfigParser
 from vujade import vujade_path as path_
 from vujade import vujade_str as str_

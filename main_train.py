@@ -5,7 +5,7 @@ import torch
 import dataloader.classification as module_dataloader
 import loss.classification as module_loss
 import metric.classification as module_metric
-from model import resnet18 as module_arch
+from model import mobileone as module_arch
 from config.parse_config import ConfigParser
 from trainer import LRScheduler, Trainer
 from vujade import vujade_path as path_

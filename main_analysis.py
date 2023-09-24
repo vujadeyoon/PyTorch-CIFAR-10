@@ -1,5 +1,5 @@
 import argparse
-from model.resnet18 import ResNet_18_2
+from model.mobileone import MobileOne
 from vujade import vujade_torch as torch_
 from vujade.vujade_debug import printd
 
@@ -21,7 +21,14 @@ if __name__=='__main__':
     input_res = (3, 32, 32)
     num_class = 10
 
-    model_proposed = ResNet_18_2(num_class=num_class).eval()
+    model_proposed = MobileOne(
+        num_blocks_per_stage=[2, 8, 10, 1],
+        num_classes=num_class,
+        width_multipliers=(0.75, 1.0, 1.0, 2.0),
+        inference_mode=False,
+        use_se=False,
+        num_conv_branches=4
+    ).eval()
     model_proposed.eval()
 
     model = model_proposed

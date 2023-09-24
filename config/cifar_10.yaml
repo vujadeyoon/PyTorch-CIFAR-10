@@ -4,9 +4,14 @@ backup:
   is_backup: true
   cmd: tar -czvf ${trainer.model_dir}/${name}/${run_id}/backup.tar.gz --exclude ./.git --exclude ./saved .
 arch:
-  type: ResNet_18_2
+  type: MobileOne
   args:
-    num_class: 10
+    num_blocks_per_stage: [2, 8, 10, 1]
+    num_classes: 10
+    width_multipliers: [0.75, 1.0, 1.0, 2.0]
+    inference_mode: false
+    use_se: false
+    num_conv_branches: 4
 train_loader:
   type: ClassificationDataLoader
   args:
