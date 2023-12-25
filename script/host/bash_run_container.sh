@@ -1,16 +1,16 @@
 #!/bin/bash
 #
 #
-# Dveloper: Sungjun Yoon
-# Email: sungjun.yoon@lge.com
+# Developer: vujadeyoon
+# Email: vujadeyoon@gmail.com
 #
 #
 readonly path_curr=$(pwd)
 readonly path_parents=$(dirname "${path_curr}")
 #
 #
-readonly repo_tag="${1:-gid:latest}"
-readonly volume_project="${2:-$(pwd):/home/dev/MakeInteriorDesign}"
+readonly repo_tag="${1:-pthclassifcation:latest}"
+readonly volume_project="${2:-$(pwd):/home/dev/PyTorchClassification}"
 readonly volume_dataset="${3:-/DATA/Dataset:/DATA/Dataset}"
 readonly port="${4:-10001:11001}"
 readonly env="${5:-/home/dev}"
