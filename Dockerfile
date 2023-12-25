@@ -185,16 +185,20 @@ RUN pip3 install --ignore-installed \
 
 # Install python3 packages for the deep learning research.
 RUN pip3 install \
+    openmim \
     dlib \
     PyWavelets \
-    pycuda>=2022.2.2 \
+    pycuda \
     tensorflow==2.13.0 \
     torch==2.0.1 \
     torchvision==0.15.2 \
     torchaudio==2.0.2 \
     kornia==0.7.0 \
+    timm==0.9.12 \
+    fvcore \
     torchinfo \
     ptflops \
+    einops \
     onnx \
     onnxruntime \
     onnxruntime-gpu \

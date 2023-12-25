@@ -4,9 +4,16 @@ backup:
   is_backup: true
   cmd: tar -czvf ${trainer.model_dir}/${name}/${run_id}/backup.tar.gz --exclude ./.git --exclude ./saved .
 arch:
-  type: ResNet_18_2
+  type: RepVit
   args:
+    variant: repvit_m0_9
     num_class: 10
+    embed_dim: [48, 96, 192, 384]
+    depth: [2, 2, 14, 2]
+    pretrained_cfg: null
+    pretrained_cfg_overlay: null
+    distillation: false
+    pretrained: false
 train_loader:
   type: ClassificationDataLoader
   args:
