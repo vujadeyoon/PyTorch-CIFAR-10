@@ -153,7 +153,6 @@ class Trainer(BaseTrainer):
             key = met.__class__.__name__
             self.metrics_valid.add_scalar(key=key, value=self.metrics_valid.avg(key=key))
 
-
         self.writer.add_image('data', make_grid(tensor_vis, nrow=self.params_vis['ncol'], normalize=self.params_vis['is_torchvision_norm']), dataformats=self.params_vis['dataformats'])
 
         # Post messages for the slack

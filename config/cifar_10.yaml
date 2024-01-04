@@ -61,15 +61,15 @@ test_loader:
     pin_memory: ${valid_loader.args.pin_memory}
 lr_scheduler:
   warmup_alogrithm: Multiplicative
-  warmup_epoch: -1
-  warmup_lr: 1.0E-5
+  warmup_epoch: 5
+  warmup_lr: 1.0E-3
   type: CosineAnnealingLR
   args:
     T_max: 200
 optimizer:
   type: SGD
   args:
-    lr: 1.0E-1
+    lr: 1.0E-3
     momentum: 0.9
     weight_decay: 5.0E-4
 loss:
